@@ -9,7 +9,7 @@
 A API fornece dados processados a partir de fontes oficiais (Câmara dos Deputados/TSE):
 * **Perfil Parlamentar:** Dados biográficos, partidários e de contato.
 * **Transparência Financeira:** Detalhamento e sumarização do uso da Cota Parlamentar (CEAP).
-* [cite_start]**Atuação Legislativa (Em breve):** Histórico de votações e proposições de leis[cite: 58].
+* [cite_start] **Atuação Legislativa (Em breve):** Histórico de votações e proposições de leis [cite: 58].
 
 ## 🛠 Tecnologias
 
@@ -78,7 +78,7 @@ Após iniciar o servidor, acesse `/api-docs` para testar os endpoints.
 
 ## 🤝 Metodologia
 
-[cite_start]Este projeto segue uma metodologia híbrida, utilizando práticas ágeis (Scrum) na fase de construção e TDD (Test Driven Development) para garantir a robustez do software[cite: 121, 125].
+[cite_start] Este projeto segue uma metodologia híbrida, utilizando práticas ágeis (Scrum) na fase de construção e TDD (Test Driven Development) para garantir a robustez do software [cite: 121, 125].
 
 ---
 **Instituto Federal de São Paulo - Campus São Paulo**
