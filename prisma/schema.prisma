@@ -1,0 +1,94 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Deputado {
+  id                   Int           @id @default(autoincrement())
+  deputadoId           Int           @unique // ID de integração da Câmara/TSE
+  nomeCivil            String        @db.VarChar(255)
+  cpf                  String        @unique @db.VarChar(14)
+  sexo                 String?       @db.VarChar(1)
+  dataNascimento       DateTime      @db.Date
+  ufNascimento         String?       @db.VarChar(2)
+  municipioNascimento  String?       @db.VarChar(100)
+  escolaridade        String?       @db.VarChar(100)
+  uriDetalhes       String?
+  urlWebsite         String?
+  
+  // Relacionamentos
+  statusHistorico      StatusAtual[] // Histórico de status/mandatos
+  despesas             Despesa[]
+  redesSociais         RedeSocial[]
+  // Votos (tabela está em desenvolvimento)
+  // votos              Voto[] 
+}
+
+model StatusAtual {
+  id                    Int      @id @default(autoincrement())
+  statusId              Int      @unique 
+  deputadoId            Int      
+  
+  urlPartido            String?
+  siglaPartido          String   @db.VarChar(10)
+  urlFoto               String?
+  nomeParlamentar       String   @db.VarChar(255)
+  uf                    String   @db.VarChar(2)
+  emailStatus           String?
+  descricaoStatus       String?
+  situacao              String? 
+  data                  DateTime 
+  
+  // Relacionamentos
+  deputado              Deputado @relation(fields: [deputadoId], references: [deputadoId])
+  gabinetes             Gabinete[]
+}
+
+model Gabinete {
+  gabineteId            Int      @id @default(autoincrement())
+  statusAtualId         Int      
+  andar                 String?
+  sala                  String?
+  nomeGabinete          String?
+  emailGabinete         String?
+  predio                String?
+  telefone              String?
+  
+  // Relacionamento
+  statusAtual           StatusAtual @relation(fields: [statusAtualId], references: [statusId])
+}
+
+model Despesa {
+  despesaId             Int      @id @default(autoincrement())
+  deputadoId            Int      
+  ano                   Int
+  mes                   Int
+  cnpjCpfFornecedor     String?  @db.VarChar(20)
+  nomeFornecedor        String?
+  codDocumento          Int?
+  dataDocumento         DateTime @db.Date
+  numRessarcimento      Int?
+  parcela               Int?
+  tipoDespesa           String
+  tipoDocumento         String?
+  urlDocumento          String?  
+  valorDocumento        Float
+  valorGlosa            Float
+  valorLiquido          Float
+  
+  // Relacionamento
+  deputado              Deputado @relation(fields: [deputadoId], references: [deputadoId])
+}
+
+model RedeSocial {
+  id                    Int      @id @default(autoincrement())
+  deputadoId            Int
+  redeId                Int
+  linkRedeSocial        String
+  
+  // Relacionamento
+  deputado              Deputado @relation(fields: [deputadoId], references: [deputadoId])
+}
