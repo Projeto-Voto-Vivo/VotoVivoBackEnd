@@ -1,0 +1,205 @@
+openapi: 3.0.0
+info:
+  title: Voto Vivo API
+  description: >
+    API para a plataforma Voto Vivo. Centraliza dados de candidatos e parlamentares, 
+    oferecendo transparência sobre trajetória, gastos e votações.
+    Desenvolvido como parte do Projeto de Extensão I[cite: 5, 54].
+  version: 1.0.0-mvp
+servers:
+  - url: http://localhost:3000
+    description: Servidor de Desenvolvimento Local
+
+paths:
+  /deputados:
+    get:
+      summary: Lista parlamentares
+      description: Retorna uma lista paginada e filtrável de deputados ativos.
+      parameters:
+        - in: query
+          name: nome
+          schema:
+            type: string
+          description: Filtrar por parte do nome parlamentar
+        - in: query
+          name: partido
+          schema:
+            type: string
+          description: Sigla do partido (ex. PL, PT)
+        - in: query
+          name: uf
+          schema:
+            type: string
+          description: Sigla do estado (ex. SP, RJ)
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/DeputadoResumo'
+
+  /deputados/{id}:
+    get:
+      summary: Detalhes do parlamentar
+      description: Retorna o perfil completo, incluindo último status, gabinete e redes sociais.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID interno do deputado
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeputadoDetalhe'
+        '404':
+          description: Deputado não encontrado
+
+  /deputados/{id}/gastos:
+    get:
+      summary: Lista de despesas (detalhada)
+      description: Retorna as notas fiscais e gastos detalhados.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: ano
+          schema:
+            type: integer
+          description: Ano da despesa (ex. 2024)
+        - in: query
+          name: mes
+          schema:
+            type: integer
+          description: Mês da despesa (1-12)
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Despesa'
+
+  /deputados/{id}/gastos/resumo:
+    get:
+      summary: Resumo de gastos (para gráficos)
+      description: Retorna o total gasto agrupado por tipo de despesa.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/GastoResumo'
+
+components:
+  schemas:
+    DeputadoResumo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        nomeParlamentar:
+          type: string
+          example: "Fulano da Silva"
+        siglaPartido:
+          type: string
+          example: "ABC"
+        uf:
+          type: string
+          example: "SP"
+        urlFoto:
+          type: string
+          format: uri
+          example: "https://example.com/foto.jpg"
+
+    DeputadoDetalhe:
+      allOf:
+        - $ref: '#/components/schemas/DeputadoResumo'
+        - type: object
+          properties:
+            nomeCivil:
+              type: string
+            dataNascimento:
+              type: string
+              format: date
+            email:
+              type: string
+              format: email
+            situacao:
+              type: string
+              example: "Em Exercício"
+            gabinete:
+              type: object
+              properties:
+                sala:
+                  type: string
+                predio:
+                  type: string
+                telefone:
+                  type: string
+            redesSociais:
+              type: array
+              items:
+                type: object
+                properties:
+                  rede:
+                    type: string
+                  url:
+                    type: string
+
+    Despesa:
+      type: object
+      properties:
+        data:
+          type: string
+          format: date
+        tipo:
+          type: string
+          example: "Emissão de Bilhete Aéreo"
+        fornecedor:
+          type: string
+        valor:
+          type: number
+          format: float
+        urlDocumento:
+          type: string
+          format: uri
+          description: Link para a nota fiscal original
+
+    GastoResumo:
+      type: object
+      properties:
+        tipoDespesa:
+          type: string
+          example: "Divulgação da Atividade Parlamentar"
+        total:
+          type: number
+          format: float
+          example: 15400.50
