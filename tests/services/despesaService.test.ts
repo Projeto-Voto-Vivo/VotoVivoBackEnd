@@ -1,3 +1,11 @@
+import { mockDeep } from 'jest-mock-extended';
+import { PrismaClient } from '@prisma/client';
+
+jest.mock('../../src/lib/prisma', () => ({
+  __esModule: true,
+  prisma: mockDeep<PrismaClient>(),
+}));
+
 import { DespesaService } from '../../src/services/DespesaService';
 import { prismaMock } from '../prismaMock';
 
@@ -13,7 +21,8 @@ describe('DespesaService', () => {
           dataDocumento: new Date('2024-01-01'),
           tipoDespesa: 'Passagem',
           valorLiquido: 100.0,
-          nomeFornecedor: 'Companhia Aérea'
+          nomeFornecedor: 'Companhia Aérea',
+          urlDocumento: 'http://nota.com'
         }
       ];
 
@@ -31,6 +40,7 @@ describe('DespesaService', () => {
         })
       );
       expect(resultado.data).toHaveLength(1);
+      expect(resultado.data[0].valor).toBe(100.0);
     });
   });
 
@@ -41,6 +51,7 @@ describe('DespesaService', () => {
         { tipoDespesa: 'Taxi', _sum: { valorLiquido: 100 } }
       ];
 
+      // @ts-ignore
       prismaMock.despesa.groupBy.mockResolvedValue(mockAgregacao);
 
       const resultado = await despesaService.resumoGastos(1);
