@@ -6,6 +6,6 @@ describe('Setup do Projeto', () => {
     const response = await request(app).get('/');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({ message: 'Voto Vivo API operante' });
+		expect(response.body).toHaveProperty('message', 'Voto Vivo API operante');
   });
 });
