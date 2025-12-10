@@ -2,14 +2,14 @@
 
 > Plataforma Digital de Dados Eleitorais Integrados
 
-[cite_start]O **Voto Vivo** é um projeto de extensão que visa combater a assimetria de informação e a desinformação no cenário eleitoral brasileiro[cite: 23]. [cite_start]Esta API serve como backend centralizado para fornecer dados transparentes, auditáveis e de fácil compreensão sobre candidatos e parlamentares (Deputados Federais no MVP)[cite: 54].
+**Voto Vivo** é um projeto de extensão que visa combater a assimetria de informação e a desinformação no cenário eleitoral brasileiro.Esta API serve como backend centralizado para fornecer dados transparentes, auditáveis e de fácil compreensão sobre candidatos e parlamentares (Deputados Federais no MVP).
 
 ## 🚀 Funcionalidades (MVP)
 
 A API fornece dados processados a partir de fontes oficiais (Câmara dos Deputados/TSE):
 * **Perfil Parlamentar:** Dados biográficos, partidários e de contato.
 * **Transparência Financeira:** Detalhamento e sumarização do uso da Cota Parlamentar (CEAP).
-* [cite_start] **Atuação Legislativa (Em breve):** Histórico de votações e proposições de leis [cite: 58].
+* **Atuação Legislativa (Em breve):** Histórico de votações e proposições de leis.
 
 ## 🛠 Tecnologias
 
@@ -24,14 +24,14 @@ A API fornece dados processados a partir de fontes oficiais (Câmara dos Deputad
 ## 📦 Como Rodar o Projeto
 
 ### Pré-requisitos
-* Node.js (v18+)
+* Node.js (v22+)
 * Docker & Docker Compose (para o Banco de Dados)
 
 ### Instalação
 
 1.  Clone o repositório:
     ```bash
-    git clone [https://github.com/seu-usuario/voto-vivo-api.git](https://github.com/seu-usuario/voto-vivo-api.git)
+    git clone https://github.com/seu-usuario/voto-vivo-api.git
     cd voto-vivo-api
     ```
 
@@ -78,8 +78,8 @@ Após iniciar o servidor, acesse `/api-docs` para testar os endpoints.
 
 ## 🤝 Metodologia
 
-[cite_start] Este projeto segue uma metodologia híbrida, utilizando práticas ágeis (Scrum) na fase de construção e TDD (Test Driven Development) para garantir a robustez do software [cite: 121, 125].
+Este projeto segue uma metodologia híbrida, utilizando práticas ágeis (Scrum) na fase de construção e TDD (Test Driven Development) para garantir a robustez do software.
 
 ---
 **Instituto Federal de São Paulo - Campus São Paulo**
-[cite_start]*Projeto de Extensão I - 2025* [cite: 1, 5, 20]
+*Projeto de Extensão I - 2025*
