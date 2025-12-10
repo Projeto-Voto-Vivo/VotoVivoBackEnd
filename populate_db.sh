@@ -90,6 +90,7 @@ if [ "$SKIP_IMPORT" = false ]; then
     echo -e "${GREEN}>>> Instalando dependências no venv...${NC}"
     pip install --upgrade pip
     pip install mysql-connector-python requests
+		pip install python-dotenv
 
     echo -e "${GREEN}>>> Rodando Scripts de População...${NC}"
 
