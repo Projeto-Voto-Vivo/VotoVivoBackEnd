@@ -1,12 +1,12 @@
 import { mockDeep } from 'jest-mock-extended';
 import { PrismaClient } from '@prisma/client';
 
-jest.mock('../../src/lib/prisma', () => ({
+jest.mock('../../lib/prisma', () => ({
   __esModule: true,
   prisma: mockDeep<PrismaClient>(),
 }));
 
-import { DeputadoService } from '../../src/services/DeputadoService';
+import { DeputadoService } from '../../services/DeputadoService';
 import { prismaMock } from '../prismaMock';
 
 const deputadoService = new DeputadoService();

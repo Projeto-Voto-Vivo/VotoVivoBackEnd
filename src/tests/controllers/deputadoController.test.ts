@@ -1,11 +1,11 @@
 import request from 'supertest';
-import app from '../../src/app';
+import app from '../../app';
 
-jest.mock('../../src/services/DeputadoService');
-jest.mock('../../src/services/DespesaService');
+jest.mock('../../services/DeputadoService');
+jest.mock('../../services/DespesaService');
 
-import { DeputadoService } from '../../src/services/DeputadoService';
-import { DespesaService } from '../../src/services/DespesaService';
+import { DeputadoService } from '../../services/DeputadoService';
+import { DespesaService } from '../../services/DespesaService';
 
 const MockedDeputadoService = DeputadoService as jest.MockedClass<typeof DeputadoService>;
 const MockedDespesaService = DespesaService as jest.MockedClass<typeof DespesaService>;

@@ -1,5 +1,5 @@
 import request from 'supertest';
-import app from '../src/app';
+import app from '../app';
 
 describe('Setup do Projeto', () => {
   it('Deve responder na rota raiz', async () => {

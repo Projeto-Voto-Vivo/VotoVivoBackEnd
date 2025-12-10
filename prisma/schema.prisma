@@ -1,95 +1,111 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
+	url      = env("DATABASE_URL")
 }
 
 model Deputado {
-  id                   Int           @id @default(autoincrement())
-  deputadoId           Int           @unique // ID de integração da Câmara/TSE
-  nomeCivil            String        @db.VarChar(255)
-  cpf                  String        @unique @db.VarChar(14)
-  sexo                 String?       @db.VarChar(1)
-  dataNascimento       DateTime      @db.Date
-  ufNascimento         String?       @db.VarChar(2)
-  municipioNascimento  String?       @db.VarChar(100)
-  escolaridade        String?       @db.VarChar(100)
-  uriDetalhes       String?
-  urlWebsite         String?
-  
-  // Relacionamentos
-  statusHistorico      StatusAtual[] // Histórico de status/mandatos
-  despesas             Despesa[]
-  redesSociais         RedeSocial[]
-  // Votos (tabela está em desenvolvimento)
-  // votos              Voto[] 
+  id                  Int       @id @map("idDeputado")
+  nomeCivil           String    @map("nomeCivil") @db.VarChar(200)
+  cpf                 String?   @unique @map("cpf") @db.VarChar(14)
+  sexo                String?   @map("sexo") @db.Char(1)
+  dataNascimento      DateTime? @map("dataNascimento") @db.Date
+  ufNascimento        String?   @map("ufNascimento") @db.Char(2)
+  municipioNascimento String?   @map("municipioNascimento") @db.VarChar(100)
+  escolaridade        String?   @map("escolaridade") @db.VarChar(100)
+  uriDetalhes         String?   @map("urlDetalhes") @db.VarChar(300)
+  urlWebsite          String?   @map("urlWebsite") @db.VarChar(300)
+  dataFalecimento     DateTime? @map("dataFalecimento") @db.Date
+
+  statusHistorico Historico[]
+  despesas        Despesa[]
+  redesSociais    RedeSocial[]
+
+  @@map("Deputado")
 }
 
-model StatusAtual {
-  id                    Int      @id @default(autoincrement())
-  statusId              Int      @unique 
-  deputadoId            Int      
+model Historico {
+  id                Int       @id @default(autoincrement()) @map("idHistorico")
+  idDeputado        Int       @map("idDeputado")
+  idPartido         Int       @map("idPartido")
+  idGabinete        Int       @map("idGabinete")
   
-  urlPartido            String?
-  siglaPartido          String   @db.VarChar(10)
-  urlFoto               String?
-  nomeParlamentar       String   @db.VarChar(255)
-  uf                    String   @db.VarChar(2)
-  emailStatus           String?
-  descricaoStatus       String?
-  situacao              String? 
-  data                  DateTime 
-  
-  // Relacionamentos
-  deputado              Deputado @relation(fields: [deputadoId], references: [deputadoId])
-  gabinetes             Gabinete[]
+  uriHistorico      String?   @map("uriHistorico") @db.VarChar(200)
+  condicaoEleitoral String?   @map("condicaoEleitoral") @db.VarChar(100)
+  urlFoto           String?   @map("urlFoto") @db.VarChar(100)
+  emailHistorico    String?   @map("emailHistorico") @db.VarChar(100)
+  data              DateTime? @map("dataHistorico") @db.Date
+  descricaoStatus   String?   @map("descricaoStatus") @db.VarChar(300)
+  nomeParlamentar   String?   @map("nomeParlamentar") @db.VarChar(200)
+  situacao          String?   @map("situacao") @db.VarChar(100)
+  nomeEleitoral     String?   @map("nomeEleitoral") @db.VarChar(200)
+  uf                String?   @map("siglaUF") @db.Char(2)
+
+  deputado Deputado @relation(fields: [idDeputado], references: [id])
+  partido  Partido  @relation(fields: [idPartido], references: [id])
+  gabinete Gabinete @relation(fields: [idGabinete], references: [id])
+
+  @@map("Historico")
+}
+
+model Partido {
+  id           Int     @id @default(autoincrement()) @map("idPartido")
+  siglaPartido String? @map("siglaPartido") @db.VarChar(300)
+  uriPartido   String? @map("uriPartido") @db.VarChar(200)
+  nome         String? @map("nome") @db.VarChar(300)
+
+  historicos Historico[]
+
+  @@map("Partido")
 }
 
 model Gabinete {
-  gabineteId            Int      @id @default(autoincrement())
-  statusAtualId         Int      
-  andar                 String?
-  sala                  String?
-  nomeGabinete          String?
-  emailGabinete         String?
-  predio                String?
-  telefone              String?
-  
-  // Relacionamento
-  statusAtual           StatusAtual @relation(fields: [statusAtualId], references: [statusId])
+  id            Int     @id @default(autoincrement()) @map("idGabinete")
+  andar         String? @map("andar") @db.VarChar(10)
+  emailGabinete String? @map("emailGabinete") @db.VarChar(150)
+  nomeGabinete  String? @map("nomeGabinete") @db.VarChar(200)
+  predio        String? @map("predio") @db.VarChar(100)
+  sala          String? @map("sala") @db.VarChar(10)
+  telefone      String? @map("telefone") @db.VarChar(20)
+
+  historicos Historico[]
+
+  @@map("Gabinete")
 }
 
 model Despesa {
-  despesaId             Int      @id @default(autoincrement())
-  deputadoId            Int      
-  ano                   Int
-  mes                   Int
-  cnpjCpfFornecedor     String?  @db.VarChar(20)
-  nomeFornecedor        String?
-  codDocumento          Int?
-  dataDocumento         DateTime @db.Date
-  numRessarcimento      Int?
-  parcela               Int?
-  tipoDespesa           String
-  tipoDocumento         String?
-  urlDocumento          String?  
-  valorDocumento        Float
-  valorGlosa            Float
-  valorLiquido          Float
+  idDeputado        Int      @map("idDeputado")
+  codDocumento      Int      @map("codDocumento")
   
-  // Relacionamento
-  deputado              Deputado @relation(fields: [deputadoId], references: [deputadoId])
+  ano               Int?     @map("ano")
+  mes               Int?     @map("mes") @db.TinyInt
+  cnpjCpfFornecedor String?  @map("cnpjCpfFornecedor") @db.VarChar(20)
+  nomeFornecedor    String?  @map("nomeFornecedor") @db.VarChar(200)
+  dataDocumento     DateTime? @map("dataDocumento") @db.Date
+  numRessarcimento  String?  @map("numRessarcimento") @db.VarChar(50)
+  parcela           String?  @map("parcela") @db.VarChar(20)
+  tipoDespesa       String?  @map("tipoDespesa") @db.VarChar(200)
+  tipoDocumento     String?  @map("tipoDocumento") @db.VarChar(200)
+  urlDocumento      String?  @map("urlDocumento") @db.VarChar(300)
+  valorDocumento    Decimal? @map("valorDocumento") @db.Decimal(10, 2)
+  valorGlosa        Decimal? @map("valorGlosa") @db.Decimal(10, 2)
+  valorLiquido      Decimal? @map("valorLiquido") @db.Decimal(10, 2)
+  
+  deputado          Deputado @relation(fields: [idDeputado], references: [id])
+
+  @@id([idDeputado, codDocumento])
+  @@map("Despesa")
 }
 
 model RedeSocial {
-  id                    Int      @id @default(autoincrement())
-  deputadoId            Int
-  redeId                Int
-  linkRedeSocial        String
-  
-  // Relacionamento
-  deputado              Deputado @relation(fields: [deputadoId], references: [deputadoId])
+  id             Int    @id @default(autoincrement()) @map("idRede")
+  idDeputado     Int    @map("idDeputado")
+  linkRedeSocial String @map("linkRedeSocial") @db.VarChar(300)
+
+  deputado Deputado @relation(fields: [idDeputado], references: [id])
+
+  @@map("RedeSocial")
 }

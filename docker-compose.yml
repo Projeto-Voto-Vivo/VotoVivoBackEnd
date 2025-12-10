@@ -1,0 +1,31 @@
+services:
+  mysql_db:
+    image: mysql:8.0
+    container_name: votovivo_db
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: .
+    container_name: votovivo_api
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=mysql://root@mysql_db:3306/votovivo
+      - PORT=3000
+    depends_on:
+      mysql_db:
+        condition: service_healthy
+    command: sh -c "npx prisma generate && node dist/server.js"
+
+volumes:
+  mysql_data:

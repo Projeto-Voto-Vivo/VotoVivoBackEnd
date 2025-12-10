@@ -7,13 +7,13 @@ interface FiltrosDespesa {
 }
 
 export class DespesaService {
-  async listarPorDeputado(deputadoId: number, filtros: FiltrosDespesa) {
+  async listarPorDeputado(idDeputado: number, filtros: FiltrosDespesa) {
     const itensPorPagina = 20;
     const pagina = filtros.pagina || 1;
     const skip = (pagina - 1) * itensPorPagina;
 
     const where = {
-      deputadoId,
+      idDeputado, 
       ...(filtros.ano && { ano: filtros.ano }),
       ...(filtros.mes && { mes: filtros.mes }),
     };
@@ -25,13 +25,6 @@ export class DespesaService {
         orderBy: { dataDocumento: 'desc' },
         take: itensPorPagina,
         skip,
-        select: {
-          dataDocumento: true,
-          tipoDespesa: true,
-          nomeFornecedor: true,
-          valorLiquido: true,
-          urlDocumento: true
-        }
       })
     ]);
 
@@ -51,23 +44,17 @@ export class DespesaService {
     };
   }
 
-  async resumoGastos(deputadoId: number) {
+  async resumoGastos(idDeputado: number) {
     const agrupado = await prisma.despesa.groupBy({
       by: ['tipoDespesa'],
-      where: { deputadoId },
-      _sum: {
-        valorLiquido: true
-      },
-      orderBy: {
-        _sum: {
-          valorLiquido: 'desc'
-        }
-      }
+      where: { idDeputado }, 
+      _sum: { valorLiquido: true },
+      orderBy: { _sum: { valorLiquido: 'desc' } }
     });
 
     return agrupado.map(item => ({
       tipoDespesa: item.tipoDespesa,
-      total: item._sum.valorLiquido || 0
+      total: item._sum.valorLiquido ?? 0 
     }));
   }
 }

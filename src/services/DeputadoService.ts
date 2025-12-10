@@ -16,10 +16,14 @@ export class DeputadoService {
     const where = {
       statusHistorico: {
         some: {
-          situacao: 'Em Exercício', // Apenas ativos conforme Swagger
-          ...(filtros.nome && { nomeParlamentar: { contains: filtros.nome, mode: 'insensitive' as const } }),
-          ...(filtros.partido && { siglaPartido: { equals: filtros.partido, mode: 'insensitive' as const } }),
-          ...(filtros.uf && { uf: { equals: filtros.uf, mode: 'insensitive' as const } }),
+          situacao: 'Em Exercício',
+          ...(filtros.nome && { nomeParlamentar: { contains: filtros.nome } }), 
+          ...(filtros.partido && { 
+            partido: { 
+              siglaPartido: { equals: filtros.partido } 
+            } 
+          }),
+          ...(filtros.uf && { uf: { equals: filtros.uf } }),
         }
       }
     };
@@ -33,19 +37,21 @@ export class DeputadoService {
         include: {
           statusHistorico: {
             orderBy: { data: 'desc' },
-            take: 1
+            take: 1,
+            include: {
+              partido: true 
+            }
           }
         }
       })
     ]);
 
-    // Formatação para simplificar o retorno (Flattening)
     const data = deputados.map(dep => {
       const status = dep.statusHistorico[0];
       return {
-        id: dep.deputadoId,
+        id: dep.id, 
         nomeParlamentar: status?.nomeParlamentar || dep.nomeCivil,
-        siglaPartido: status?.siglaPartido,
+        siglaPartido: status?.partido?.siglaPartido || 'S/P', 
         uf: status?.uf,
         urlFoto: status?.urlFoto
       };
@@ -64,13 +70,14 @@ export class DeputadoService {
 
   async buscarPorId(id: number) {
     const deputado = await prisma.deputado.findUnique({
-      where: { deputadoId: id },
+      where: { id: id }, 
       include: {
         statusHistorico: {
           orderBy: { data: 'desc' },
           take: 1,
-          include: {
-            gabinetes: true
+          include: { 
+            gabinete: true, 
+            partido: true   
           }
         },
         redesSociais: true
@@ -82,20 +89,18 @@ export class DeputadoService {
     const status = deputado.statusHistorico[0];
 
     return {
-      id: deputado.deputadoId,
+      id: deputado.id,
       nomeCivil: deputado.nomeCivil,
       dataNascimento: deputado.dataNascimento,
-      email: status?.emailStatus,
+      email: status?.emailHistorico, 
       situacao: status?.situacao,
       nomeParlamentar: status?.nomeParlamentar,
-      siglaPartido: status?.siglaPartido,
+      siglaPartido: status?.partido?.siglaPartido,
       uf: status?.uf,
       urlFoto: status?.urlFoto,
-      gabinete: status?.gabinetes[0] || null,
-      redesSociais: deputado.redesSociais.map(r => ({
-        // No schema real, redeId provavelmente mapearia para um nome, 
-        // aqui simplificamos retornando o link direto
-        url: r.linkRedeSocial 
+      gabinete: status?.gabinete || null,
+      redesSociais: deputado.redesSociais.map((r: any) => ({
+        url: r.linkRedeSocial
       }))
     };
   }
