@@ -41,7 +41,6 @@ describe('DespesaService', () => {
         { tipoDespesa: 'Taxi', _sum: { valorLiquido: 100 } }
       ];
 
-      // @ts-ignore - Prisma groupby mock type issue
       prismaMock.despesa.groupBy.mockResolvedValue(mockAgregacao);
 
       const resultado = await despesaService.resumoGastos(1);

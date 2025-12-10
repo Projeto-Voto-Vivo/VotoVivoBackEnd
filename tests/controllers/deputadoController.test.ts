@@ -91,7 +91,6 @@ describe('Deputado Controller e Rotas', () => {
         { tipoDespesa: 'Telefonia', total: 200.00 }
       ];
 
-      // Mock da implementação do serviço
       MockedDespesaService.prototype.resumoGastos.mockResolvedValue(mockResumo);
 
       const response = await request(app).get('/deputados/1/gastos/resumo');
