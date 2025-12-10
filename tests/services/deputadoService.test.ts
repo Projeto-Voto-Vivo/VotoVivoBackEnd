@@ -65,4 +65,28 @@ describe('DeputadoService', () => {
       expect(resultado).toBeNull();
     });
   });
+
+	describe('GET /deputados/:id/gastos/resumo', () => {
+    it('deve retornar o resumo de gastos agrupado', async () => {
+      const mockResumo = [
+        { tipoDespesa: 'Passagem Aérea', total: 5000.00 },
+        { tipoDespesa: 'Telefonia', total: 200.00 }
+      ];
+
+      // Mock da implementação do serviço
+      MockedDespesaService.prototype.resumoGastos.mockResolvedValue(mockResumo);
+
+      const response = await request(app).get('/deputados/1/gastos/resumo');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toHaveLength(2);
+      expect(response.body[0]).toHaveProperty('total', 5000.00);
+      expect(MockedDespesaService.prototype.resumoGastos).toHaveBeenCalledWith(1);
+    });
+
+    it('deve retornar 400 se ID inválido', async () => {
+      const response = await request(app).get('/deputados/abc/gastos/resumo');
+      expect(response.status).toBe(400);
+    });
+  });
 });
