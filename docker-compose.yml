@@ -21,6 +21,10 @@ services:
       - "3000:3000"
     environment:
       - DATABASE_URL=mysql://root@mysql_db:3306/votovivo
+      - DB_HOST=mysql_db
+      - DB_USER=root
+      - DB_PASSWORD=
+      - DB_NAME=votovivo
       - PORT=3000
     depends_on:
       mysql_db:
