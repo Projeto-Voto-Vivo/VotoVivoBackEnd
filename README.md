@@ -41,8 +41,8 @@ O projeto inclui um script de automação (`populate_db.sh`) que configura o ban
 
 2.  **Dê permissão e execute o script:**
     ```bash
-    chmod +x populate_db.sh // --no-import se não quiser popular os dados
-    ./populate_db.sh
+    chmod +x populate_db.sh 
+    ./populate_db.sh // --no-import se não quiser popular os dados
     ```
     *Este script irá subir o container MySQL, criar o ambiente virtual Python, baixar os dados reais da Câmara e popular o banco localmente.*
 
