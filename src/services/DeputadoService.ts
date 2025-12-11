@@ -16,7 +16,7 @@ export class DeputadoService {
     const where = {
       statusHistorico: {
         some: {
-          situacao: 'Em Exercício',
+          situacao: 'Exercício',
           ...(filtros.nome && { nomeParlamentar: { contains: filtros.nome } }), 
           ...(filtros.partido && { 
             partido: { 

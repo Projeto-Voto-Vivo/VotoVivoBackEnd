@@ -18,6 +18,10 @@ REPO_URL="git@github.com:Projeto-Voto-Vivo/VotoVivoDataAggregator.git"
 REPO_DIR="VotoVivoDataAggregator"
 SCRIPTS_DIR="$REPO_DIR/popular"
 
+FRONT_REPO_URL="git@github.com:Projeto-Voto-Vivo/VotoVivoFrontEnd.git"
+FRONT_REPO_DIR="VotoVivoFrontEnd"
+FRONT_SCRIPTS_DIR="$FRONT_REPO_DIR/scripts"
+
 # --- 1. Clone do Repositorio ---
 echo -e "${GREEN}>>> Verificando repositório de dados...${NC}"
 
@@ -37,6 +41,20 @@ fi
 if [ ! -d "$SCRIPTS_DIR" ]; then
     echo -e "${RED}>>> Erro: A pasta '$SCRIPTS_DIR' não foi encontrada dentro do repositório.${NC}"
     exit 1
+fi
+
+echo -e "${GREEN}>>> Verificando repositório Frontend...${NC}"
+
+if [ ! -d "$FRONT_REPO_DIR" ]; then
+		echo -e "${YELLOW}>>> Diretório '$FRONT_REPO_DIR' não encontrado. Clonando repositório...${NC}"
+		git clone "$FRONT_REPO_URL"
+		
+		if [ $? -ne 0 ]; then
+				echo -e "${RED}>>> Falha ao clonar o repositório Frontend. Verifique se o Git está instalado e suas chaves SSH configuradas.${NC}"
+				exit 1
+		fi
+else
+		echo -e "${GREEN}>>> Diretório do repositório Frontend já existe.${NC}"
 fi
 
 # --- 2. Infraestrutura Docker (Banco de Dados) ---
@@ -119,23 +137,27 @@ else
     echo -e "${YELLOW}>>> Pulando importação de dados conforme solicitado (--start-only).${NC}"
 fi
 
-# --- 5. Inicialização da API com Verificação ---
+# --- 5. Inicialização da API e Front-end com Verificação ---
 
-echo -e "${GREEN}>>> Reconstruindo e iniciando a API...${NC}"
-# Força o rebuild para garantir que as alterações no package.json sejam pegas
-docker-compose up -d --build api
+echo -e "${GREEN}>>> Reconstruindo e iniciando API e Frontend...${NC}"
+docker-compose up -d --build api frontend
 
-echo -e "${YELLOW}>>> Verificando saúde da API...${NC}"
-# Aguarda um pouco para o processo node iniciar
-sleep 5
+echo -e "${YELLOW}>>> Verificando saúde dos serviços...${NC}"
+sleep 10
 
-# Verifica se o container ainda está rodando
+# Verifica se a API está rodando
 if [ "$(docker inspect -f '{{.State.Running}}' votovivo_api)" = "true" ]; then
-    echo -e "${GREEN}>>> Sucesso! API rodando em http://localhost:3000${NC}"
-    echo -e "${GREEN}>>> Documentação Swagger em http://localhost:3000/api-docs${NC}"
+    echo -e "${GREEN}>>> API Backend rodando em http://localhost:3001${NC}"
+    echo -e "${GREEN}>>> Documentação Swagger em http://localhost:3001/api-docs${NC}"
 else
-    echo -e "${RED}>>> ERRO: O container da API iniciou mas caiu logo em seguida.${NC}"
-    echo -e "${YELLOW}>>> Exibindo logs de erro da API:${NC}"
+    echo -e "${RED}>>> ERRO: Container da API falhou.${NC}"
     docker-compose logs api
-    exit 1
+fi
+
+# Verifica se o Frontend está rodando
+if [ "$(docker inspect -f '{{.State.Running}}' votovivo_web)" = "true" ]; then
+    echo -e "${GREEN}>>> Frontend VotoVivo rodando em http://localhost:3000${NC}"
+else
+    echo -e "${RED}>>> ERRO: Container do Frontend falhou.${NC}"
+    docker-compose logs frontend
 fi
