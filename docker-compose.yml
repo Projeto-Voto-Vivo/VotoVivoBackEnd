@@ -4,31 +4,38 @@ services:
     container_name: votovivo_db
     environment:
       MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+      MYSQL_DATABASE: votovivo
     ports:
       - "3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
 
   api:
     build: .
     container_name: votovivo_api
     ports:
-      - "3001:3000" 
+      - "3001:3000"
     environment:
-      - DATABASE_URL=mysql://root@mysql_db:3306/votovivo
-      - PORT=3000
+      DATABASE_URL: mysql://root@mysql_db:3306/votovivo
+      PORT: 3000
     depends_on:
       mysql_db:
         condition: service_healthy
-    command: sh -c "npx prisma generate && node dist/server.js"
+    command: >
+      sh -c "
+        npx prisma generate &&
+        npx prisma db push &&
+        npx prisma db seed &&
+        node dist/server.js
+      "
 
   frontend:
-    build: 
+    build:
       context: ./VotoVivoFrontEnd
       dockerfile: Dockerfile
       target: dev
@@ -36,8 +43,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      - NEXT_PUBLIC_API_URL=http://api:3000
-      - NODE_ENV=development 
+      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NODE_ENV: development
     command: npm run dev
     depends_on:
       - api

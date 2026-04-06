@@ -2,19 +2,19 @@ openapi: 3.0.0
 info:
   title: Voto Vivo API
   description: >
-    API para a plataforma Voto Vivo. Centraliza dados de candidatos e parlamentares, 
+    API para a plataforma Voto Vivo. Centraliza dados de candidatos e parlamentares,
     oferecendo transparência sobre trajetória, gastos e votações.
-    Desenvolvido como parte do Projeto de Extensão I[cite: 5, 54].
   version: 1.0.0-mvp
+
 servers:
-  - url: http://localhost:3000
+  - url: http://localhost:3001
     description: Servidor de Desenvolvimento Local
 
 paths:
-  /deputados:
+  /parlamentar:
     get:
       summary: Lista parlamentares
-      description: Retorna uma lista paginada e filtrável de deputados ativos.
+      description: Retorna uma lista filtrável de parlamentares ativos.
       parameters:
         - in: query
           name: nome
@@ -39,33 +39,33 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: '#/components/schemas/DeputadoResumo'
+                  $ref: '#/components/schemas/ParlamentarResumo'
 
-  /deputados/{id}:
+  /parlamentares/{id}:
     get:
       summary: Detalhes do parlamentar
-      description: Retorna o perfil completo, incluindo último status, gabinete e redes sociais.
+      description: Retorna o perfil completo do parlamentar.
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: integer
-          description: ID interno do deputado
+          description: ID interno do parlamentar
       responses:
         '200':
           description: Sucesso
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/DeputadoDetalhe'
+                $ref: '#/components/schemas/ParlamentarDetalhe'
         '404':
-          description: Deputado não encontrado
+          description: Parlamentar não encontrado
 
-  /deputados/{id}/gastos:
+  /parlamentares/{id}/gastos:
     get:
-      summary: Lista de despesas (detalhada)
-      description: Retorna as notas fiscais e gastos detalhados.
+      summary: Lista de despesas
+      description: Retorna as despesas detalhadas do parlamentar.
       parameters:
         - in: path
           name: id
@@ -97,9 +97,9 @@ paths:
                 items:
                   $ref: '#/components/schemas/Despesa'
 
-  /deputados/{id}/gastos/resumo:
+  /parlamentares/{id}/gastos/resumo:
     get:
-      summary: Resumo de gastos (para gráficos)
+      summary: Resumo de gastos
       description: Retorna o total gasto agrupado por tipo de despesa.
       parameters:
         - in: path
@@ -119,7 +119,7 @@ paths:
 
 components:
   schemas:
-    DeputadoResumo:
+    ParlamentarResumo:
       type: object
       properties:
         id:
@@ -127,21 +127,21 @@ components:
           example: 1
         nomeParlamentar:
           type: string
-          example: "Fulano da Silva"
+          example: Fulano da Silva
         siglaPartido:
           type: string
-          example: "ABC"
+          example: ABC
         uf:
           type: string
-          example: "SP"
+          example: SP
         urlFoto:
           type: string
           format: uri
-          example: "https://example.com/foto.jpg"
+          example: https://example.com/foto.jpg
 
-    DeputadoDetalhe:
+    ParlamentarDetalhe:
       allOf:
-        - $ref: '#/components/schemas/DeputadoResumo'
+        - $ref: '#/components/schemas/ParlamentarResumo'
         - type: object
           properties:
             nomeCivil:
@@ -152,17 +152,12 @@ components:
             email:
               type: string
               format: email
-            situacao:
-              type: string
-              example: "Em Exercício"
             gabinete:
               type: object
               properties:
-                sala:
-                  type: string
-                predio:
-                  type: string
                 telefone:
+                  type: string
+                endereco:
                   type: string
             redesSociais:
               type: array
@@ -182,7 +177,7 @@ components:
           format: date
         tipo:
           type: string
-          example: "Emissão de Bilhete Aéreo"
+          example: Emissão de Bilhete Aéreo
         fornecedor:
           type: string
         valor:
@@ -198,7 +193,7 @@ components:
       properties:
         tipoDespesa:
           type: string
-          example: "Divulgação da Atividade Parlamentar"
+          example: Divulgação da Atividade Parlamentar
         total:
           type: number
           format: float
