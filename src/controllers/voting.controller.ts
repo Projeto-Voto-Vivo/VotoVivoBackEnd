@@ -32,7 +32,7 @@ export class VotingController {
     }
   };
 
-  private parsePositiveInt(value: string): number {
+  private parsePositiveInt(value: string | string[]): number {
     const parsed = Number(value);
     if (!Number.isInteger(parsed) || parsed <= 0) {
       throw new Error('ID inválido');
