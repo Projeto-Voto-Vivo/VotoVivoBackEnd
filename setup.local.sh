@@ -46,7 +46,7 @@ echo -e "${GREEN}>>> Aplicando schema...${NC}"
 npx prisma db push
 
 echo -e "${GREEN}>>> Populando banco com mocks...${NC}"
-npx prisma db seed
+npx tsx --env-file=.env prisma/seed.ts
 
 echo -e "${GREEN}>>> Setup concluído.${NC}"
 echo -e "${GREEN}>>> Para iniciar a API:${NC} npm run dev"
