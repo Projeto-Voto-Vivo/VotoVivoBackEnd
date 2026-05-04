@@ -19,10 +19,10 @@ services:
     build: .
     container_name: votovivo_api
     ports:
-      - "3001:3000"
+      - "3001:3001"
     environment:
       DATABASE_URL: mysql://root@mysql_db:3306/votovivo
-      PORT: 3000
+      PORT: 3001
     depends_on:
       mysql_db:
         condition: service_healthy
@@ -43,7 +43,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_API_URL: http://api:3001
       NODE_ENV: development
     command: npm run dev
     depends_on:

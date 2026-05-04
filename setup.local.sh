@@ -29,7 +29,7 @@ if [ ! -f ".env" ]; then
   echo -e "${YELLOW}>>> Arquivo .env não encontrado. Criando .env padrão...${NC}"
   cat > .env <<EOF
 DATABASE_URL="mysql://root@localhost:3306/votovivo"
-PORT=3000
+PORT=3001
 EOF
 fi
 
@@ -46,8 +46,8 @@ echo -e "${GREEN}>>> Aplicando schema...${NC}"
 npx prisma db push
 
 echo -e "${GREEN}>>> Populando banco com mocks...${NC}"
-npx prisma db seed
+npx tsx --env-file=.env prisma/seed.ts
 
 echo -e "${GREEN}>>> Setup concluído.${NC}"
 echo -e "${GREEN}>>> Para iniciar a API:${NC} npm run dev"
-echo -e "${GREEN}>>> Swagger:${NC} http://localhost:3000/api-docs"
+echo -e "${GREEN}>>> Swagger:${NC} http://localhost:3001/api-docs"
