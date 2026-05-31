@@ -17,6 +17,16 @@ parliamentarianRouter.get(
 );
 
 parliamentarianRouter.get(
+  '/parlamentares/:id/emendas/resumo',
+  parliamentarianController.getAmendmentSummaryByParliamentarianId,
+);
+
+parliamentarianRouter.get(
+  '/parlamentares/:id/emendas',
+  parliamentarianController.listAmendmentsByParliamentarianId,
+);
+
+parliamentarianRouter.get(
   '/parlamentares/:id',
   parliamentarianController.getParliamentarianById,
 );

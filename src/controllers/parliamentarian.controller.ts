@@ -77,6 +77,40 @@ export class ParliamentarianController {
     }
   };
 
+  listAmendmentsByParliamentarianId = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const id = this.parsePositiveInt(req.params.id, 'id');
+      const result =
+        await this.parliamentarianService.listAmendmentsByParliamentarianId(id);
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getAmendmentSummaryByParliamentarianId = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const id = this.parsePositiveInt(req.params.id, 'id');
+      const result =
+        await this.parliamentarianService.getAmendmentSummaryByParliamentarianId(
+          id,
+        );
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   private parsePositiveInt(value: string | string[], fieldName: string): number {
     const parsed = Number(value);
 
