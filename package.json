@@ -16,7 +16,9 @@
     "setup:docker:frontend": "bash setup.sh --with-frontend",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "prisma:pull": "prisma db pull",
+    "prisma:studio": "prisma studio"
   },
   "dependencies": {
     "@prisma/client": "^6.19.0",

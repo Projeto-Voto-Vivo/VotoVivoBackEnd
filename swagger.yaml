@@ -117,6 +117,74 @@ paths:
                 items:
                   $ref: '#/components/schemas/GastoResumo'
 
+
+  /parlamentares/{id}/emendas:
+    get:
+      summary: Lista emendas do parlamentar
+      description: Retorna todas as emendas vinculadas ao parlamentar.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID interno do parlamentar
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Emenda'
+        '404':
+          description: Parlamentar não encontrado
+
+  /parlamentares/{id}/emendas/resumo:
+    get:
+      summary: Resumo de emendas do parlamentar
+      description: Retorna totais e valores agregados das emendas vinculadas ao parlamentar.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID interno do parlamentar
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmendaResumo'
+        '404':
+          description: Parlamentar não encontrado
+
+  /emendas/{id}/documentos:
+    get:
+      summary: Lista documentos de uma emenda
+      description: Retorna os metadados dos documentos vinculados a uma emenda.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID interno da emenda
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EmendaDocumento'
+        '404':
+          description: Emenda não encontrada
+
 components:
   schemas:
     ParlamentarResumo:
@@ -198,3 +266,80 @@ components:
           type: number
           format: float
           example: 15400.50
+
+    Emenda:
+      type: object
+      properties:
+        id:
+          type: integer
+        codigoEmenda:
+          type: string
+        ano:
+          type: integer
+        tipoEmenda:
+          type: string
+        autor:
+          type: string
+        nomeAutor:
+          type: string
+        numeroEmenda:
+          type: string
+        localidadeDoGasto:
+          type: string
+        funcao:
+          type: string
+        subfuncao:
+          type: string
+        valorEmpenhado:
+          type: number
+          format: float
+        valorLiquidado:
+          type: number
+          format: float
+        valorPago:
+          type: number
+          format: float
+        metodoVinculo:
+          type: string
+        confiancaVinculo:
+          type: number
+          format: float
+
+    EmendaResumo:
+      type: object
+      properties:
+        totalEmendas:
+          type: integer
+        totalEmpenhado:
+          type: number
+          format: float
+        totalLiquidado:
+          type: number
+          format: float
+        totalPago:
+          type: number
+          format: float
+
+    EmendaDocumento:
+      type: object
+      properties:
+        id:
+          type: integer
+        idEmenda:
+          type: integer
+        codigoEmenda:
+          type: string
+        data:
+          type: string
+          format: date
+        fase:
+          type: string
+        codigoDocumento:
+          type: string
+        codigoDocumentoResumido:
+          type: string
+        especieTipo:
+          type: string
+        tipoEmenda:
+          type: string
+

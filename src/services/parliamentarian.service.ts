@@ -203,6 +203,80 @@ export class ParliamentarianService {
     }));
   }
 
+  async listAmendmentsByParliamentarianId(parliamentarianId: number) {
+    await this.ensureParliamentarianExists(parliamentarianId);
+
+    const links = await this.prisma.amendmentParliamentarian.findMany({
+      where: {
+        parliamentarianId,
+      },
+      orderBy: {
+        amendmentId: 'asc',
+      },
+      include: {
+        amendment: true,
+      },
+    });
+
+    return links.map((link) => ({
+      id: link.amendment.id,
+      codigoEmenda: link.amendment.code,
+      ano: link.amendment.year,
+      tipoEmenda: link.amendment.amendmentType,
+      autor: link.amendment.author,
+      nomeAutor: link.amendment.authorName,
+      numeroEmenda: link.amendment.amendmentNumber,
+      localidadeDoGasto: link.amendment.spendingLocation,
+      funcao: link.amendment.functionName,
+      subfuncao: link.amendment.subfunctionName,
+      valorEmpenhado: Number(link.amendment.committedAmount ?? 0),
+      valorLiquidado: Number(link.amendment.liquidatedAmount ?? 0),
+      valorPago: Number(link.amendment.paidAmount ?? 0),
+      valorRestoInscrito: Number(link.amendment.remainderRegistered ?? 0),
+      valorRestoCancelado: Number(link.amendment.remainderCanceled ?? 0),
+      valorRestoPago: Number(link.amendment.remainderPaid ?? 0),
+      metodoVinculo: link.linkMethod,
+      confiancaVinculo: Number(link.confidence ?? 0),
+    }));
+  }
+
+  async getAmendmentSummaryByParliamentarianId(parliamentarianId: number) {
+    await this.ensureParliamentarianExists(parliamentarianId);
+
+    const links = await this.prisma.amendmentParliamentarian.findMany({
+      where: {
+        parliamentarianId,
+      },
+      select: {
+        amendmentId: true,
+        amendment: {
+          select: {
+            committedAmount: true,
+            liquidatedAmount: true,
+            paidAmount: true,
+          },
+        },
+      },
+    });
+
+    return links.reduce(
+      (summary, link) => ({
+        totalEmendas: summary.totalEmendas + 1,
+        totalEmpenhado:
+          summary.totalEmpenhado + Number(link.amendment.committedAmount ?? 0),
+        totalLiquidado:
+          summary.totalLiquidado + Number(link.amendment.liquidatedAmount ?? 0),
+        totalPago: summary.totalPago + Number(link.amendment.paidAmount ?? 0),
+      }),
+      {
+        totalEmendas: 0,
+        totalEmpenhado: 0,
+        totalLiquidado: 0,
+        totalPago: 0,
+      },
+    );
+  }
+
   private async ensureParliamentarianExists(id: number) {
     const parliamentarian = await this.prisma.parliamentarian.findUnique({
       where: { id },
