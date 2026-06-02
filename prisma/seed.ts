@@ -1,6 +1,8 @@
 import { PrismaClient, VoteChoice } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
-const prisma = new PrismaClient();
+const adapter = new PrismaMariaDb(process.env.DATABASE_URL!);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   await prisma.vote.deleteMany();

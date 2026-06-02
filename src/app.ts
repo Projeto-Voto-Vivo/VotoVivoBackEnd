@@ -1,13 +1,14 @@
 import express from 'express';
 import cors from 'cors';
 import swaggerUi from 'swagger-ui-express';
-import yaml from 'yamljs';
+import yaml from 'js-yaml';
+import fs from 'fs';
 import path from 'path';
 import { router } from './routes';
 import { errorHandler } from './middlewares/error-handler';
 
 const app = express();
-const swaggerDocument = yaml.load(path.join(__dirname, '../swagger.yaml'));
+const swaggerDocument = yaml.load(fs.readFileSync(path.join(__dirname, '../swagger.yaml'), 'utf8')) as Record<string, unknown>;
 
 app.use(express.json());
 app.use(cors());

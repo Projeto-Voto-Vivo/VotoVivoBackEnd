@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { ParliamentarianController } from '../controllers/parliamentarian.controller';
 import { ParliamentarianService } from '../services/parliamentarian.service';
+import { prisma } from '../lib/prisma';
 
 const parliamentarianRouter = Router();
-const prisma = new PrismaClient();
 
 const parliamentarianService = new ParliamentarianService(prisma);
 const parliamentarianController = new ParliamentarianController(
