@@ -11,10 +11,12 @@ servers:
     description: Servidor de Desenvolvimento Local
 
 paths:
-  /parlamentar:
+  /parlamentares:
     get:
       summary: Lista parlamentares
       description: Retorna uma lista filtrável de parlamentares ativos.
+      tags:
+        - Parlamentares
       parameters:
         - in: query
           name: nome
@@ -31,20 +33,34 @@ paths:
           schema:
             type: string
           description: Sigla do estado (ex. SP, RJ)
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
       responses:
         '200':
           description: Sucesso
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ParlamentarResumo'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ParlamentarResumo'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
 
   /parlamentares/{id}:
     get:
       summary: Detalhes do parlamentar
       description: Retorna o perfil completo do parlamentar.
+      tags:
+        - Parlamentares
       parameters:
         - in: path
           name: id
@@ -59,29 +75,51 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ParlamentarDetalhe'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
         '404':
-          description: Parlamentar não encontrado
+          $ref: '#/components/responses/NaoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
 
-  /parlamentares/{id}/gastos:
+  /parlamentares/{id}/perfil:
     get:
-      summary: Lista de despesas
-      description: Retorna as despesas detalhadas do parlamentar.
+      summary: Perfil Agregado do Parlamentar
+      description: Rota agregadora que consolida os dados do parlamentar para alimentar os painéis do frontend.
+      tags:
+        - Parlamentares
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: integer
-        - in: query
-          name: ano
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ParlamentarPerfil'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /parlamentares/{id}/proposicoes:
+    get:
+      summary: Lista proposições do parlamentar
+      description: Retorna todas as proposições em que o parlamentar consta como autor.
+      tags:
+        - Proposicoes
+      parameters:
+        - in: path
+          name: id
+          required: true
           schema:
             type: integer
-          description: Ano da despesa (ex. 2024)
-        - in: query
-          name: mes
-          schema:
-            type: integer
-          description: Mês da despesa (1-12)
         - in: query
           name: pagina
           schema:
@@ -93,14 +131,65 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Despesa'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProposicaoPerfil'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
 
-  /parlamentares/{id}/gastos/resumo:
+  /parlamentares/{id}/votacoes:
     get:
-      summary: Resumo de gastos
-      description: Retorna o total gasto agrupado por tipo de despesa.
+      summary: Histórico de votos
+      description: Retorna as votações nominais nas quais o parlamentar participou.
+      tags:
+        - Votacoes
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VotacaoPerfil'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /parlamentares/{id}/presenca:
+    get:
+      summary: Métrica de assiduidade
+      description: Retorna a porcentagem de presença.
+      tags:
+        - Votacoes
       parameters:
         - in: path
           name: id
@@ -113,45 +202,139 @@ paths:
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/GastoResumo'
+                type: object
+                properties:
+                  presenca:
+                    $ref: '#/components/schemas/PresencaResumo'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
 
+  /parlamentares/{id}/despesas:
+    get:
+      summary: Lista de despesas
+      description: Retorna as despesas detalhadas do parlamentar com paginação.
+      tags:
+        - Despesas
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: ano
+          schema:
+            type: integer
+        - in: query
+          name: mes
+          schema:
+            type: integer
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Despesa'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /parlamentares/{id}/despesas/resumo:
+    get:
+      summary: Resumo de gastos
+      description: Retorna métricas financeiras agrupadas e resumo para o painel.
+      tags:
+        - Despesas
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DespesasPerfil'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
 
   /parlamentares/{id}/emendas:
     get:
       summary: Lista emendas do parlamentar
       description: Retorna todas as emendas vinculadas ao parlamentar.
+      tags:
+        - Emendas
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: integer
-          description: ID interno do parlamentar
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
       responses:
         '200':
           description: Sucesso
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Emenda'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Emenda'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
         '404':
-          description: Parlamentar não encontrado
+          $ref: '#/components/responses/NaoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
 
   /parlamentares/{id}/emendas/resumo:
     get:
-      summary: Resumo de emendas do parlamentar
-      description: Retorna totais e valores agregados das emendas vinculadas ao parlamentar.
+      summary: Resumo de emendas
+      description: Retorna totais agregados das emendas vinculadas ao parlamentar.
+      tags:
+        - Emendas
       parameters:
         - in: path
           name: id
           required: true
           schema:
             type: integer
-          description: ID interno do parlamentar
       responses:
         '200':
           description: Sucesso
@@ -159,13 +342,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EmendaResumo'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
         '404':
-          description: Parlamentar não encontrado
+          $ref: '#/components/responses/NaoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
 
-  /emendas/{id}/documentos:
+  /emendas/{id}/detalhes:
     get:
-      summary: Lista documentos de uma emenda
-      description: Retorna os metadados dos documentos vinculados a uma emenda.
+      summary: Detalhes de uma emenda
+      description: Retorna os dados completos de uma emenda, incluindo parlamentares vinculados e documentos.
+      tags:
+        - Emendas
       parameters:
         - in: path
           name: id
@@ -179,14 +368,89 @@ paths:
           content:
             application/json:
               schema:
+                $ref: '#/components/schemas/EmendaDetalhe'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /emendas/{id}/documentos:
+    get:
+      summary: Lista documentos de uma emenda
+      description: Retorna os metadados dos documentos vinculados a uma emenda.
+      tags:
+        - Emendas
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/EmendaDocumento'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
         '404':
-          description: Emenda não encontrada
+          $ref: '#/components/responses/NaoEncontrado'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
 
 components:
+  responses:
+    ParametroInvalido:
+      description: Parâmetro inválido
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResponse'
+          example:
+            message: 'Parâmetro inválido: id.'
+    NaoEncontrado:
+      description: Recurso não encontrado
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResponse'
+          example:
+            message: Parlamentar não encontrado.
+    ErroInterno:
+      description: Erro interno do servidor
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResponse'
+          example:
+            message: Erro interno do servidor.
+
   schemas:
+    ErroResponse:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Descrição do erro.
+
+    PaginationMeta:
+      type: object
+      properties:
+        total:
+          type: integer
+        page:
+          type: integer
+        lastPage:
+          type: integer
+        limit:
+          type: integer
+
     ParlamentarResumo:
       type: object
       properties:
@@ -237,6 +501,55 @@ components:
                   url:
                     type: string
 
+    ProposicaoPerfil:
+      type: object
+      properties:
+        id:
+          type: integer
+        sigla:
+          type: string
+        numero:
+          type: integer
+        ano:
+          type: integer
+        ementa:
+          type: string
+        resumo:
+          type: string
+        papel:
+          type: string
+        situacao:
+          type: string
+        tema:
+          type: array
+          items:
+            type: string
+        dataApresentacao:
+          type: string
+          format: date
+
+    VotacaoPerfil:
+      type: object
+      properties:
+        id:
+          type: integer
+        titulo:
+          type: string
+        data:
+          type: string
+          format: date
+        tema:
+          type: string
+        resumo:
+          type: string
+        voto:
+          type: string
+          enum: [SIM, NAO, ABSTENCAO, AUSENTE]
+        resultado:
+          type: string
+        orientacaoCasa:
+          type: string
+
     Despesa:
       type: object
       properties:
@@ -245,7 +558,6 @@ components:
           format: date
         tipo:
           type: string
-          example: Emissão de Bilhete Aéreo
         fornecedor:
           type: string
         valor:
@@ -254,18 +566,29 @@ components:
         urlDocumento:
           type: string
           format: uri
-          description: Link para a nota fiscal original
 
-    GastoResumo:
+    DespesasPerfil:
       type: object
       properties:
-        tipoDespesa:
-          type: string
-          example: Divulgação da Atividade Parlamentar
-        total:
+        totalAno:
           type: number
           format: float
-          example: 15400.50
+        mediaMensal:
+          type: number
+          format: float
+        maiorReembolso:
+          type: number
+          format: float
+        categorias:
+          type: array
+          items:
+            type: object
+            properties:
+              tipoDespesa:
+                type: string
+              total:
+                type: number
+                format: float
 
     Emenda:
       type: object
@@ -320,6 +643,48 @@ components:
           type: number
           format: float
 
+    EmendaDetalhe:
+      allOf:
+        - $ref: '#/components/schemas/Emenda'
+        - type: object
+          properties:
+            valorRestoInscrito:
+              type: number
+              format: float
+            valorRestoCancelado:
+              type: number
+              format: float
+            valorRestoPago:
+              type: number
+              format: float
+            parlamentares:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: integer
+                  nomeCivil:
+                    type: string
+                  nomeUrna:
+                    type: string
+                  partidoAtual:
+                    type: string
+                  uf:
+                    type: string
+                  fotoUrl:
+                    type: string
+                    format: uri
+                  metodoVinculo:
+                    type: string
+                  confiancaVinculo:
+                    type: number
+                    format: float
+            documentos:
+              type: array
+              items:
+                $ref: '#/components/schemas/EmendaDocumento'
+
     EmendaDocumento:
       type: object
       properties:
@@ -342,4 +707,71 @@ components:
           type: string
         tipoEmenda:
           type: string
+        urlPortal:
+          type: string
+          format: uri
+          nullable: true
 
+    PresencaResumo:
+      type: object
+      properties:
+        sessoesDeliberativas:
+          type: object
+          description: Atividade no palco principal (Plenário).
+          properties:
+            taxa:
+              type: number
+              format: float
+              example: 95.5
+            totalEventos:
+              type: integer
+              example: 120
+            faltas:
+              type: integer
+              example: 5
+        naoSessoesDeliberativas:
+          type: object
+          description: Atividade nos bastidores (Comissões e outros órgãos).
+          properties:
+            taxa:
+              type: number
+              format: float
+              example: 82.0
+            totalEventos:
+              type: integer
+              example: 45
+            faltas:
+              type: integer
+              example: 8
+
+    ParlamentarPerfil:
+      type: object
+      properties:
+        visaoGeral:
+          $ref: '#/components/schemas/ParlamentarDetalhe'
+        votacoes:
+          type: object
+          properties:
+            presenca:
+              $ref: '#/components/schemas/PresencaResumo'
+            alinhamento:
+              type: number
+            recentes:
+              type: array
+              items:
+                $ref: '#/components/schemas/VotacaoPerfil'
+        proposicoes:
+          type: object
+          properties:
+            total:
+              type: integer
+            aprovadas:
+              type: integer
+            recentes:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProposicaoPerfil'
+        despesas:
+          $ref: '#/components/schemas/DespesasPerfil'
+        emendas:
+          $ref: '#/components/schemas/EmendaResumo'

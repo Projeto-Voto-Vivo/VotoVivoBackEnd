@@ -57,6 +57,7 @@ export class ParliamentarianService {
       },
       select: {
         id: true,
+        role: true,
         ballotName: true,
         currentParty: true,
         state: true,
@@ -70,6 +71,7 @@ export class ParliamentarianService {
       siglaPartido: parliamentarian.currentParty ?? '',
       uf: parliamentarian.state ?? '',
       urlFoto: parliamentarian.photoUrl ?? '',
+      cargo: parliamentarian.role,
     }));
   }
 
@@ -78,6 +80,7 @@ export class ParliamentarianService {
       where: { id },
       select: {
         id: true,
+        role: true,
         ballotName: true,
         civilName: true,
         currentParty: true,
@@ -106,6 +109,7 @@ export class ParliamentarianService {
       siglaPartido: parliamentarian.currentParty ?? '',
       uf: parliamentarian.state ?? '',
       urlFoto: parliamentarian.photoUrl ?? '',
+      cargo: parliamentarian.role,
       nomeCivil: parliamentarian.civilName,
       dataNascimento: parliamentarian.birthDate
         ? parliamentarian.birthDate.toISOString().split('T')[0]
