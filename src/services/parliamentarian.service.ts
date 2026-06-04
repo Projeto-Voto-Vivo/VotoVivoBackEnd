@@ -11,11 +11,16 @@ type ListParliamentariansFilters = {
   nome?: string;
   partido?: string;
   uf?: string;
+  pagina?: number;
 };
 
 type ListExpensesFilters = {
   ano?: number;
   mes?: number;
+  pagina?: number;
+};
+
+type PaginatedFilters = {
   pagina?: number;
 };
 
@@ -50,29 +55,44 @@ export class ParliamentarianService {
       where.state = filters.uf.toUpperCase();
     }
 
-    const parliamentarians = await this.prisma.parliamentarian.findMany({
-      where,
-      orderBy: {
-        ballotName: 'asc',
-      },
-      select: {
-        id: true,
-        role: true,
-        ballotName: true,
-        currentParty: true,
-        state: true,
-        photoUrl: true,
-      },
-    });
+    const page = this.normalizePage(filters.pagina);
 
-    return parliamentarians.map((parliamentarian) => ({
-      id: parliamentarian.id,
-      nomeParlamentar: parliamentarian.ballotName ?? '',
-      siglaPartido: parliamentarian.currentParty ?? '',
-      uf: parliamentarian.state ?? '',
-      urlFoto: parliamentarian.photoUrl ?? '',
-      cargo: parliamentarian.role,
-    }));
+    const [parliamentarians, total] = await Promise.all([
+      this.prisma.parliamentarian.findMany({
+        where,
+        orderBy: {
+          ballotName: 'asc',
+        },
+        select: {
+          id: true,
+          role: true,
+          ballotName: true,
+          currentParty: true,
+          state: true,
+          photoUrl: true,
+        },
+        skip: (page - 1) * this.pageSize,
+        take: this.pageSize,
+      }),
+      this.prisma.parliamentarian.count({ where }),
+    ]);
+
+    return {
+      data: parliamentarians.map((parliamentarian) => ({
+        id: parliamentarian.id,
+        nomeParlamentar: parliamentarian.ballotName ?? '',
+        siglaPartido: parliamentarian.currentParty ?? '',
+        uf: parliamentarian.state ?? '',
+        urlFoto: parliamentarian.photoUrl ?? '',
+        cargo: parliamentarian.role,
+      })),
+      meta: {
+        total,
+        page,
+        lastPage: Math.max(1, Math.ceil(total / this.pageSize)),
+        limit: this.pageSize,
+      },
+    };
   }
 
   async getParliamentarianById(id: number) {
@@ -134,10 +154,7 @@ export class ParliamentarianService {
   ) {
     await this.ensureParliamentarianExists(parliamentarianId);
 
-    const page =
-      filters.pagina && Number.isInteger(filters.pagina) && filters.pagina > 0
-        ? filters.pagina
-        : 1;
+    const page = this.normalizePage(filters.pagina);
 
     const where: any = {
       parliamentarianId,
@@ -158,53 +175,95 @@ export class ParliamentarianService {
       };
     }
 
-    const expenses = await this.prisma.expense.findMany({
-      where,
-      orderBy: {
-        expenseDate: 'desc',
-      },
-      skip: (page - 1) * this.pageSize,
-      take: this.pageSize,
-      select: {
-        expenseDate: true,
-        category: true,
-        supplierName: true,
-        amount: true,
-        invoiceUrl: true,
-      },
-    });
+    const [expenses, total] = await Promise.all([
+      this.prisma.expense.findMany({
+        where,
+        orderBy: {
+          expenseDate: 'desc',
+        },
+        skip: (page - 1) * this.pageSize,
+        take: this.pageSize,
+        select: {
+          expenseDate: true,
+          category: true,
+          supplierName: true,
+          amount: true,
+          invoiceUrl: true,
+        },
+      }),
+      this.prisma.expense.count({ where }),
+    ]);
 
-    return expenses.map((expense) => ({
-      data: expense.expenseDate
-        ? expense.expenseDate.toISOString().split('T')[0]
-        : null,
-      tipo: expense.category ?? '',
-      fornecedor: expense.supplierName ?? '',
-      valor: Number(expense.amount ?? 0),
-      urlDocumento: expense.invoiceUrl,
-    }));
+    return {
+      data: expenses.map((expense) => ({
+        data: expense.expenseDate
+          ? expense.expenseDate.toISOString().split('T')[0]
+          : null,
+        tipo: expense.category ?? '',
+        fornecedor: expense.supplierName ?? '',
+        valor: Number(expense.amount ?? 0),
+        urlDocumento: expense.invoiceUrl,
+      })),
+      meta: {
+        total,
+        page,
+        lastPage: Math.max(1, Math.ceil(total / this.pageSize)),
+        limit: this.pageSize,
+      },
+    };
   }
 
   async getExpenseSummaryByParliamentarianId(parliamentarianId: number) {
     await this.ensureParliamentarianExists(parliamentarianId);
 
-    const groupedExpenses = await this.prisma.expense.groupBy({
-      by: ['category'],
-      where: {
-        parliamentarianId,
-      },
-      _sum: {
-        amount: true,
-      },
-      orderBy: {
-        category: 'asc',
-      },
-    });
+    const currentYear = new Date().getFullYear();
 
-    return groupedExpenses.map((group) => ({
-      tipoDespesa: group.category ?? 'Não informado',
-      total: Number(group._sum.amount ?? 0),
-    }));
+    const [groupedExpenses, yearExpenses] = await Promise.all([
+      this.prisma.expense.groupBy({
+        by: ['category'],
+        where: {
+          parliamentarianId,
+        },
+        _sum: {
+          amount: true,
+        },
+        orderBy: {
+          category: 'asc',
+        },
+      }),
+      this.prisma.expense.findMany({
+        where: {
+          parliamentarianId,
+          expenseDate: {
+            gte: new Date(currentYear, 0, 1),
+            lt: new Date(currentYear + 1, 0, 1),
+          },
+        },
+        select: {
+          amount: true,
+        },
+      }),
+    ]);
+
+    const totalAno = yearExpenses.reduce(
+      (sum, e) => sum + Number(e.amount ?? 0),
+      0,
+    );
+    const mediaMensal = totalAno / 12;
+    const maiorReembolso =
+      yearExpenses.length > 0
+        ? Math.max(...yearExpenses.map((e) => Number(e.amount ?? 0)))
+        : 0;
+
+    return {
+      totalAno,
+      mediaMensal,
+      maiorReembolso,
+      categorias: groupedExpenses.map((group) => ({
+        tipoDespesa: group.category ?? 'Não informado',
+        total: Number(group._sum.amount ?? 0),
+      })),
+    };
   }
 
   async listAmendmentsByParliamentarianId(parliamentarianId: number) {
@@ -279,6 +338,153 @@ export class ParliamentarianService {
         totalPago: 0,
       },
     );
+  }
+
+  async listPropositionsByParliamentarianId(
+    parliamentarianId: number,
+    filters: PaginatedFilters,
+  ) {
+    await this.ensureParliamentarianExists(parliamentarianId);
+
+    const page = this.normalizePage(filters.pagina);
+
+    const [authorships, total] = await Promise.all([
+      this.prisma.propositionAuthor.findMany({
+        where: { parliamentarianId },
+        include: { proposition: true },
+        skip: (page - 1) * this.pageSize,
+        take: this.pageSize,
+      }),
+      this.prisma.propositionAuthor.count({
+        where: { parliamentarianId },
+      }),
+    ]);
+
+    return {
+      data: authorships.map(({ proposition }) => ({
+        id: proposition.id,
+        sigla: proposition.typeAbbreviation,
+        numero: proposition.number,
+        ano: proposition.year,
+        ementa: proposition.summary,
+        situacao: proposition.currentStatus,
+      })),
+      meta: {
+        total,
+        page,
+        lastPage: Math.max(1, Math.ceil(total / this.pageSize)),
+        limit: this.pageSize,
+      },
+    };
+  }
+
+  async listVotingsByParliamentarianId(
+    parliamentarianId: number,
+    filters: PaginatedFilters,
+  ) {
+    await this.ensureParliamentarianExists(parliamentarianId);
+
+    const page = this.normalizePage(filters.pagina);
+
+    const [votes, total] = await Promise.all([
+      this.prisma.vote.findMany({
+        where: { parliamentarianId },
+        include: { voting: true },
+        orderBy: { voting: { votingDate: 'desc' } },
+        skip: (page - 1) * this.pageSize,
+        take: this.pageSize,
+      }),
+      this.prisma.vote.count({ where: { parliamentarianId } }),
+    ]);
+
+    return {
+      data: votes.map((vote) => ({
+        id: vote.voting.id,
+        data: vote.voting.votingDate
+          ? vote.voting.votingDate.toISOString().split('T')[0]
+          : null,
+        resumo: vote.voting.subjectSummary,
+        voto: vote.choice,
+        resultado: vote.voting.finalResult,
+        tipo: vote.voting.votingType,
+      })),
+      meta: {
+        total,
+        page,
+        lastPage: Math.max(1, Math.ceil(total / this.pageSize)),
+        limit: this.pageSize,
+      },
+    };
+  }
+
+  async getPresenceByParliamentarianId(parliamentarianId: number) {
+    await this.ensureParliamentarianExists(parliamentarianId);
+
+    const votes = await this.prisma.vote.findMany({
+      where: { parliamentarianId },
+      select: { choice: true },
+    });
+
+    const total = votes.length;
+    const faltas = votes.filter((v) => v.choice === 'ABSENT').length;
+    const taxa = total > 0 ? ((total - faltas) / total) * 100 : 0;
+
+    return {
+      presenca: {
+        sessoesDeliberativas: {
+          taxa: parseFloat(taxa.toFixed(1)),
+          totalEventos: total,
+          faltas,
+        },
+        naoSessoesDeliberativas: {
+          taxa: 0,
+          totalEventos: 0,
+          faltas: 0,
+        },
+      },
+    };
+  }
+
+  async getAggregatedProfile(parliamentarianId: number) {
+    await this.ensureParliamentarianExists(parliamentarianId);
+
+    const [
+      visaoGeral,
+      presence,
+      votingHistory,
+      propositionHistory,
+      despesas,
+      emendas,
+    ] = await Promise.all([
+      this.getParliamentarianById(parliamentarianId),
+      this.getPresenceByParliamentarianId(parliamentarianId),
+      this.listVotingsByParliamentarianId(parliamentarianId, { pagina: 1 }),
+      this.listPropositionsByParliamentarianId(parliamentarianId, {
+        pagina: 1,
+      }),
+      this.getExpenseSummaryByParliamentarianId(parliamentarianId),
+      this.getAmendmentSummaryByParliamentarianId(parliamentarianId),
+    ]);
+
+    return {
+      visaoGeral,
+      votacoes: {
+        presenca: presence.presenca,
+        alinhamento: null,
+        recentes: votingHistory.data,
+      },
+      proposicoes: {
+        total: propositionHistory.meta.total,
+        aprovadas: 0,
+        recentes: propositionHistory.data,
+      },
+      despesas,
+      emendas,
+    };
+  }
+
+  private normalizePage(pagina?: number): number {
+    return pagina && Number.isInteger(pagina) && pagina > 0 ? pagina : 1;
   }
 
   private async ensureParliamentarianExists(id: number) {

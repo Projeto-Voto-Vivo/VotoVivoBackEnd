@@ -11,8 +11,13 @@ const parliamentarianController = new ParliamentarianController(
 );
 
 parliamentarianRouter.get(
-  '/parlamentar',
+  '/parlamentares',
   parliamentarianController.listParliamentarians,
+);
+
+parliamentarianRouter.get(
+  '/parlamentares/:id/perfil',
+  parliamentarianController.getAggregatedProfile,
 );
 
 parliamentarianRouter.get(
@@ -26,18 +31,33 @@ parliamentarianRouter.get(
 );
 
 parliamentarianRouter.get(
-  '/parlamentares/:id',
-  parliamentarianController.getParliamentarianById,
+  '/parlamentares/:id/despesas/resumo',
+  parliamentarianController.getExpenseSummaryByParliamentarianId,
 );
 
 parliamentarianRouter.get(
-  '/parlamentares/:id/gastos',
+  '/parlamentares/:id/despesas',
   parliamentarianController.listExpensesByParliamentarianId,
 );
 
 parliamentarianRouter.get(
-  '/parlamentares/:id/gastos/resumo',
-  parliamentarianController.getExpenseSummaryByParliamentarianId,
+  '/parlamentares/:id/proposicoes',
+  parliamentarianController.listPropositionsByParliamentarianId,
+);
+
+parliamentarianRouter.get(
+  '/parlamentares/:id/votacoes',
+  parliamentarianController.listVotingsByParliamentarianId,
+);
+
+parliamentarianRouter.get(
+  '/parlamentares/:id/presenca',
+  parliamentarianController.getPresenceByParliamentarianId,
+);
+
+parliamentarianRouter.get(
+  '/parlamentares/:id',
+  parliamentarianController.getParliamentarianById,
 );
 
 export { parliamentarianRouter };
