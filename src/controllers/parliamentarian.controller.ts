@@ -111,6 +111,24 @@ export class ParliamentarianController {
     }
   };
 
+  listPropositionsByParliamentarianId = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const id = this.parsePositiveInt(req.params.id, 'id');
+      const result =
+        await this.parliamentarianService.listPropositionsByParliamentarianId(
+          id,
+        );
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   private parsePositiveInt(value: string | string[], fieldName: string): number {
     const parsed = Number(value);
 

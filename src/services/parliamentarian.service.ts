@@ -277,6 +277,50 @@ export class ParliamentarianService {
     );
   }
 
+async listPropositionsByParliamentarianId(parliamentarianId: number) {
+  try {
+
+    await this.ensureParliamentarianExists(parliamentarianId);
+
+    const authorLinks = await this.prisma.propositionAuthor.findMany({
+      where: {
+        parliamentarianId,
+      },
+      select: {
+        propositionId: true,
+      },
+    });
+
+    console.log("authorLinks:", authorLinks);
+
+    if (authorLinks.length === 0) {
+      return [];
+    }
+
+    const propositionIds = [
+      ...new Set(authorLinks.map((link) => link.propositionId)),
+    ];
+
+    console.log("propositionIds:", propositionIds);
+
+    const propositions = await this.prisma.proposition.findMany({
+      where: {
+        id: {
+          in: propositionIds,
+        },
+      },
+    });
+    console.log(
+  JSON.stringify(propositions, null, 2)
+);
+    return propositions;
+
+  } catch (error) {
+    console.error("ERRO COMPLETO:", error);
+    throw error;
+  }
+}
+
   private async ensureParliamentarianExists(id: number) {
     const parliamentarian = await this.prisma.parliamentarian.findUnique({
       where: { id },

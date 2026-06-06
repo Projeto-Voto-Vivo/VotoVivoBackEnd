@@ -162,6 +162,29 @@ paths:
         '404':
           description: Parlamentar não encontrado
 
+  /parlamentares/{id}/proposicoes:
+    get:
+      summary: Proposições por parlamentar
+      description: Retorna todas as proposições associadas ao parlamentar.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID interno do parlamentar
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Proposicao'
+        '404':
+          description: Parlamentar não encontrado
+
   /emendas/{id}/documentos:
     get:
       summary: Lista documentos de uma emenda
@@ -342,4 +365,24 @@ components:
           type: string
         tipoEmenda:
           type: string
+
+    Proposicao:
+      type: object
+      properties:
+        id:
+          type: integer
+        apiId:
+          type: integer
+        typeAbbreviation:
+          type: string
+          example: PL
+        number:
+          type: integer
+        year:
+          type: integer
+        summary:
+          type: string
+        currentStatus:
+          type: string
+          example: Em Tramitação
 

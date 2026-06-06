@@ -22,6 +22,11 @@ parliamentarianRouter.get(
 );
 
 parliamentarianRouter.get(
+  '/parlamentares/:id/proposicoes',
+  parliamentarianController.listPropositionsByParliamentarianId,
+);
+
+parliamentarianRouter.get(
   '/parlamentares/:id/emendas',
   parliamentarianController.listAmendmentsByParliamentarianId,
 );
