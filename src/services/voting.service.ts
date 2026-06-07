@@ -7,7 +7,7 @@ export class VotingService {
   async listVotings() {
     const votings = await this.prisma.voting.findMany({
       include: {
-        proposition: true,
+        proposition: { include: { propositionType: true } },
       },
       orderBy: {
         votingDate: 'desc',
@@ -24,7 +24,7 @@ export class VotingService {
       proposicao: v.proposition
         ? {
             id: v.proposition.id,
-            tipo: v.proposition.typeAbbreviation,
+            tipo: v.proposition?.propositionType?.sigla ?? null,
             numero: v.proposition.number,
             ano: v.proposition.year,
           }

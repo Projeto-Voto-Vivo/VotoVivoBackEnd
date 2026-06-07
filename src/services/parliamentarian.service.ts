@@ -351,7 +351,7 @@ export class ParliamentarianService {
     const [authorships, total] = await Promise.all([
       this.prisma.propositionAuthor.findMany({
         where: { parliamentarianId },
-        include: { proposition: true },
+        include: { proposition: { include: { propositionType: true } } },
         skip: (page - 1) * this.pageSize,
         take: this.pageSize,
       }),
@@ -363,7 +363,7 @@ export class ParliamentarianService {
     return {
       data: authorships.map(({ proposition }) => ({
         id: proposition.id,
-        sigla: proposition.typeAbbreviation,
+        sigla: proposition.propositionType?.sigla ?? null,
         numero: proposition.number,
         ano: proposition.year,
         ementa: proposition.summary,

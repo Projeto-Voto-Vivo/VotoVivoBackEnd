@@ -7,25 +7,25 @@ datasource db {
 }
 
 enum VoteChoice {
-  YES
-  NO
-  ABSTENTION
-  ABSENT
+  YES        @map("SIM")
+  NO         @map("NAO")
+  ABSTENTION @map("ABSTENCAO")
+  ABSENT     @map("AUSENTE")
 }
 
 model Parliamentarian {
-  id                 Int      @id @default(autoincrement()) @map("idParlamentar")
-  apiId              Int      @unique @map("idApi")
-  role               String?  @db.VarChar(50) @map("cargo")
-  civilName          String?  @db.VarChar(255) @map("nomeCivil")
-  ballotName         String?  @db.VarChar(255) @map("nomeUrna")
-  currentParty       String?  @db.VarChar(50) @map("partidoAtual")
-  state              String?  @db.Char(2) @map("uf")
-  photoUrl           String?  @db.VarChar(500) @map("fotoUrl")
+  id                 Int       @id @default(autoincrement()) @map("idParlamentar")
+  apiId              Int       @unique @map("idApi")
+  role               String?   @db.VarChar(50) @map("cargo")
+  civilName          String?   @db.VarChar(255) @map("nomeCivil")
+  ballotName         String?   @db.VarChar(255) @map("nomeUrna")
+  currentParty       String?   @db.VarChar(50) @map("partidoAtual")
+  state              String?   @db.Char(2) @map("uf")
+  photoUrl           String?   @db.VarChar(500) @map("fotoUrl")
   birthDate          DateTime? @db.Date @map("dataNascimento")
-  email              String?  @db.VarChar(255)
-  phone              String?  @db.VarChar(20) @map("telefone")
-  officeAddress      String?  @db.VarChar(500) @map("enderecoGabinete")
+  email              String?   @db.VarChar(255)
+  phone              String?   @db.VarChar(20) @map("telefone")
+  officeAddress      String?   @db.VarChar(500) @map("enderecoGabinete")
 
   votes              Vote[]
   propositionAuthors PropositionAuthor[]
@@ -36,46 +36,58 @@ model Parliamentarian {
   @@map("parlamentar")
 }
 
+model PropositionType {
+  id           Int          @id @default(autoincrement()) @map("idTipoProposicao")
+  sigla        String       @db.VarChar(10)
+  nome         String       @db.VarChar(255)
+  casa         String       @db.VarChar(20)
+
+  propositions Proposition[]
+
+  @@map("tipoProposicao")
+}
+
 model Proposition {
-  id                Int      @id @default(autoincrement()) @map("idProposicao")
-  apiId             Int      @unique @map("idApi")
-  typeAbbreviation  String?  @db.VarChar(10) @map("siglaTipo")
-  number            Int?
-  year              Int?
-  summary           String?  @db.Text @map("ementa")
-  currentStatus     String?  @db.VarChar(100) @map("statusAtual")
+  id             Int              @id @default(autoincrement()) @map("idProposicao")
+  apiId          Int              @unique @map("idApi")
+  typeId         Int?             @map("idTipoProposicao")
+  number         String?          @db.VarChar(20) @map("numero")
+  year           Int?             @map("ano")
+  summary        String?          @db.Text @map("ementa")
+  currentStatus  String?          @db.VarChar(255) @map("statusAtual")
 
-  votings           Voting[]
-  authors           PropositionAuthor[]
+  propositionType PropositionType? @relation(fields: [typeId], references: [id])
+  votings         Voting[]
+  authors         PropositionAuthor[]
 
-  @@map("PROPOSICAO")
+  @@map("proposicao")
 }
 
 model Voting {
-  id                Int       @id @default(autoincrement()) @map("idVotacao")
-  apiId             Int       @unique @map("idApi")
-  propositionId     Int?      @map("idProposicao")
-  votingDate        DateTime? @db.Date @map("dataVotacao")
-  subjectSummary    String?   @db.Text @map("resumoMateria")
-  finalResult       String?   @db.VarChar(100) @map("resultadoFinal")
-  votingType        String?   @db.VarChar(50) @map("tipoVotacao")
+  id             Int          @id @default(autoincrement()) @map("idVotacao")
+  apiId          String       @unique @map("idApi")
+  propositionId  Int?         @map("idProposicao")
+  votingDate     DateTime?    @db.DateTime @map("dataHora")
+  subjectSummary String?      @db.Text @map("resumoMateria")
+  finalResult    String?      @db.VarChar(100) @map("resultadoFinal")
+  votingType     String?      @db.VarChar(50) @map("tipoVotacao")
 
-  proposition       Proposition? @relation(fields: [propositionId], references: [id], onDelete: SetNull)
-  votes             Vote[]
+  proposition    Proposition? @relation(fields: [propositionId], references: [id], onDelete: SetNull)
+  votes          Vote[]
 
-  @@map("VOTACAO")
+  @@map("votacao")
 }
 
 model Vote {
-  id                Int          @id @default(autoincrement()) @map("idVoto")
-  parliamentarianId Int          @map("idParlamentar")
-  votingId          Int          @map("idVotacao")
-  choice            VoteChoice?  @map("votoRegistrado")
+  id                Int             @id @default(autoincrement()) @map("idVoto")
+  parliamentarianId Int             @map("idParlamentar")
+  votingId          Int             @map("idVotacao")
+  choice            VoteChoice?     @map("votoRegistrado")
 
   parliamentarian   Parliamentarian @relation(fields: [parliamentarianId], references: [id])
   voting            Voting          @relation(fields: [votingId], references: [id])
 
-  @@map("VOTO")
+  @@map("voto")
 }
 
 model PropositionAuthor {
@@ -86,7 +98,7 @@ model PropositionAuthor {
   proposition       Proposition     @relation(fields: [propositionId], references: [id])
 
   @@id([parliamentarianId, propositionId])
-  @@map("AUTORIA_PROPOSICAO")
+  @@map("autoriaProposicao")
 }
 
 model SocialNetwork {
@@ -97,22 +109,22 @@ model SocialNetwork {
 
   parliamentarian   Parliamentarian @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade)
 
-  @@map("REDE_SOCIAL")
+  @@map("redeSocial")
 }
 
 model Expense {
-  id                  Int       @id @default(autoincrement()) @map("idDespesa")
-  parliamentarianId   Int       @map("idParlamentar")
-  expenseDate         DateTime? @db.Date @map("dataDespesa")
-  amount              Decimal?  @db.Decimal(10, 2) @map("valor")
-  supplierName        String?   @db.VarChar(255) @map("fornecedorNome")
-  supplierDocument    String?   @db.VarChar(20) @map("fornecedorCnpjCpf")
-  invoiceUrl          String?   @db.VarChar(500) @map("notaFiscalUrl")
-  category            String?   @db.VarChar(100)
+  id                Int       @id @default(autoincrement()) @map("idDespesa")
+  parliamentarianId Int       @map("idParlamentar")
+  expenseDate       DateTime? @db.Date @map("dataDespesa")
+  amount            Decimal?  @db.Decimal(10, 2) @map("valor")
+  supplierName      String?   @db.VarChar(255) @map("fornecedorNome")
+  supplierDocument  String?   @db.VarChar(20) @map("fornecedorCnpjCpf")
+  invoiceUrl        String?   @db.VarChar(500) @map("notaFiscalUrl")
+  category          String?   @db.VarChar(100) @map("categoria")
 
-  parliamentarian     Parliamentarian @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade)
+  parliamentarian   Parliamentarian @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade)
 
-  @@map("DESPESA")
+  @@map("despesa")
 }
 
 model Amendment {
@@ -133,7 +145,7 @@ model Amendment {
   remainderCanceled   Decimal?  @db.Decimal(15, 2) @map("valorRestoCancelado")
   remainderPaid       Decimal?  @db.Decimal(15, 2) @map("valorRestoPago")
 
-  documents           AmendmentDocument[]
+  documents            AmendmentDocument[]
   parliamentarianLinks AmendmentParliamentarian[]
 
   @@map("emenda")
