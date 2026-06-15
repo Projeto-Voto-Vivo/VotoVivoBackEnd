@@ -16,7 +16,9 @@ describe('ParliamentarianService', () => {
       },
       expense: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
         groupBy: jest.fn(),
+        aggregate: jest.fn(),
         count: jest.fn(),
       },
       amendmentParliamentarian: {
@@ -297,19 +299,44 @@ describe('ParliamentarianService', () => {
   });
 
   describe('getExpenseSummaryByParliamentarianId', () => {
-    it('should return DespesasPerfil with totals and categories', async () => {
+    it('should return DespesasPerfil with totals and categories for the latest available year', async () => {
       prismaMock.parliamentarian.findUnique.mockResolvedValue({ id: 1 });
+      prismaMock.expense.findFirst.mockResolvedValue({
+        expenseDate: new Date('2025-12-16T00:00:00.000Z'),
+      });
       prismaMock.expense.groupBy.mockResolvedValue([
         { category: 'Hospedagem', _sum: { amount: 850 } },
         { category: 'Divulgação da Atividade Parlamentar', _sum: { amount: 430.75 } },
       ]);
-      prismaMock.expense.findMany.mockResolvedValue([
-        { amount: 850 },
-        { amount: 430.75 },
-      ]);
+      prismaMock.expense.aggregate.mockResolvedValue({
+        _sum: { amount: 1280.75 },
+        _max: { amount: 850 },
+      });
 
       const result = await service.getExpenseSummaryByParliamentarianId(1);
 
+      expect(prismaMock.expense.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            parliamentarianId: 1,
+            expenseDate: {
+              gte: new Date(2025, 0, 1),
+              lt: new Date(2026, 0, 1),
+            },
+          },
+        }),
+      );
+      expect(prismaMock.expense.aggregate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            parliamentarianId: 1,
+            expenseDate: {
+              gte: new Date(2025, 0, 1),
+              lt: new Date(2026, 0, 1),
+            },
+          },
+        }),
+      );
       expect(result).toEqual({
         totalAno: 1280.75,
         mediaMensal: 1280.75 / 12,
@@ -321,22 +348,62 @@ describe('ParliamentarianService', () => {
       });
     });
 
+    it('should use explicit year and month filters when provided', async () => {
+      prismaMock.parliamentarian.findUnique.mockResolvedValue({ id: 1 });
+      prismaMock.expense.groupBy.mockResolvedValue([
+        { category: 'Combustíveis', _sum: { amount: 200 } },
+      ]);
+      prismaMock.expense.aggregate.mockResolvedValue({
+        _sum: { amount: 200 },
+        _max: { amount: 200 },
+      });
+
+      const result = await service.getExpenseSummaryByParliamentarianId(1, {
+        ano: 2025,
+        mes: 12,
+      });
+
+      expect(prismaMock.expense.findFirst).not.toHaveBeenCalled();
+      expect(prismaMock.expense.groupBy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            parliamentarianId: 1,
+            expenseDate: {
+              gte: new Date(2025, 11, 1),
+              lt: new Date(2026, 0, 1),
+            },
+          },
+        }),
+      );
+      expect(result.mediaMensal).toBe(200);
+    });
+
     it('should use "Não informado" when category is null', async () => {
       prismaMock.parliamentarian.findUnique.mockResolvedValue({ id: 1 });
+      prismaMock.expense.findFirst.mockResolvedValue({
+        expenseDate: new Date('2025-01-10T00:00:00.000Z'),
+      });
       prismaMock.expense.groupBy.mockResolvedValue([
         { category: null, _sum: { amount: 100 } },
       ]);
-      prismaMock.expense.findMany.mockResolvedValue([]);
+      prismaMock.expense.aggregate.mockResolvedValue({
+        _sum: { amount: 100 },
+        _max: { amount: 100 },
+      });
 
       const result = await service.getExpenseSummaryByParliamentarianId(1);
 
       expect(result.categorias).toEqual([{ tipoDespesa: 'Não informado', total: 100 }]);
     });
 
-    it('should return zeros when no year expenses found', async () => {
+    it('should return zeros when no expenses found', async () => {
       prismaMock.parliamentarian.findUnique.mockResolvedValue({ id: 1 });
+      prismaMock.expense.findFirst.mockResolvedValue(null);
       prismaMock.expense.groupBy.mockResolvedValue([]);
-      prismaMock.expense.findMany.mockResolvedValue([]);
+      prismaMock.expense.aggregate.mockResolvedValue({
+        _sum: { amount: null },
+        _max: { amount: null },
+      });
 
       const result = await service.getExpenseSummaryByParliamentarianId(1);
 
@@ -506,6 +573,9 @@ describe('ParliamentarianService', () => {
             year: 2024,
             summary: 'Dispõe sobre o uso de energias renováveis.',
             currentStatus: 'Em tramitação',
+            propositionType: {
+              sigla: 'PL',
+            },
           },
         },
       ]);
@@ -517,7 +587,13 @@ describe('ParliamentarianService', () => {
 
       expect(prismaMock.propositionAuthor.findMany).toHaveBeenCalledWith({
         where: { parliamentarianId: 1 },
-        include: { proposition: true },
+        include: {
+          proposition: {
+            include: {
+              propositionType: true,
+            },
+          },
+        },
         skip: 0,
         take: 20,
       });
@@ -585,6 +661,16 @@ describe('ParliamentarianService', () => {
             subjectSummary: 'Votação sobre PL 123/2024',
             finalResult: 'Aprovado',
             votingType: 'Nominal',
+            proposition: {
+              id: 99,
+              number: '123',
+              year: 2024,
+              summary: 'Dispõe sobre transparência legislativa.',
+              currentStatus: 'Em tramitação',
+              propositionType: {
+                sigla: 'PL',
+              },
+            },
           },
         },
       ]);
@@ -596,7 +682,17 @@ describe('ParliamentarianService', () => {
 
       expect(prismaMock.vote.findMany).toHaveBeenCalledWith({
         where: { parliamentarianId: 1 },
-        include: { voting: true },
+        include: {
+          voting: {
+            include: {
+              proposition: {
+                include: {
+                  propositionType: true,
+                },
+              },
+            },
+          },
+        },
         orderBy: { voting: { votingDate: 'desc' } },
         skip: 0,
         take: 20,
@@ -607,10 +703,20 @@ describe('ParliamentarianService', () => {
           {
             id: 10,
             data: '2024-03-15',
+            titulo: 'PL 123/2024',
+            tema: 'Dispõe sobre transparência legislativa.',
             resumo: 'Votação sobre PL 123/2024',
             voto: 'YES',
             resultado: 'Aprovado',
             tipo: 'Nominal',
+            proposicao: {
+              id: 99,
+              tipo: 'PL',
+              numero: '123',
+              ano: 2024,
+              ementa: 'Dispõe sobre transparência legislativa.',
+              situacao: 'Em tramitação',
+            },
           },
         ],
         meta: { total: 1, page: 1, lastPage: 1, limit: 20 },
@@ -628,6 +734,7 @@ describe('ParliamentarianService', () => {
             subjectSummary: null,
             finalResult: null,
             votingType: null,
+            proposition: null,
           },
         },
       ]);
@@ -736,7 +843,12 @@ describe('ParliamentarianService', () => {
       prismaMock.vote.count.mockResolvedValue(0);
       prismaMock.propositionAuthor.findMany.mockResolvedValue([]);
       prismaMock.propositionAuthor.count.mockResolvedValue(0);
+      prismaMock.expense.findFirst.mockResolvedValue(null);
       prismaMock.expense.groupBy.mockResolvedValue([]);
+      prismaMock.expense.aggregate.mockResolvedValue({
+        _sum: { amount: null },
+        _max: { amount: null },
+      });
       prismaMock.expense.findMany.mockResolvedValue([]);
       prismaMock.amendmentParliamentarian.findMany.mockResolvedValue([]);
     });

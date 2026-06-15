@@ -262,7 +262,7 @@ paths:
   /parlamentares/{id}/despesas/resumo:
     get:
       summary: Resumo de gastos
-      description: Retorna métricas financeiras agrupadas e resumo para o painel.
+      description: Retorna métricas financeiras agrupadas e resumo para o painel. Quando ano não é informado, usa o ano mais recente com despesa cadastrada para o parlamentar.
       tags:
         - Despesas
       parameters:
@@ -271,6 +271,18 @@ paths:
           required: true
           schema:
             type: integer
+        - in: query
+          name: ano
+          schema:
+            type: integer
+          description: Ano de referência do resumo. Se omitido, usa o ano mais recente com despesa cadastrada.
+        - in: query
+          name: mes
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 12
+          description: Mês de referência do resumo. Deve ser usado junto ao ano para consolidar apenas um mês.
       responses:
         '200':
           description: Sucesso
@@ -535,20 +547,52 @@ components:
           type: integer
         titulo:
           type: string
+          description: Identificador legível da proposição vinculada, quando disponível.
+          example: PL 123/2024
         data:
           type: string
           format: date
         tema:
           type: string
+          nullable: true
+          description: Ementa ou resumo da proposição vinculada à votação.
         resumo:
           type: string
+          nullable: true
+          description: Texto da deliberação/resultado retornado pela origem da votação.
         voto:
           type: string
           enum: [SIM, NAO, ABSTENCAO, AUSENTE]
         resultado:
           type: string
-        orientacaoCasa:
+          nullable: true
+        tipo:
           type: string
+          nullable: true
+        proposicao:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            tipo:
+              type: string
+              nullable: true
+              example: PL
+            numero:
+              type: string
+              nullable: true
+              example: '123'
+            ano:
+              type: integer
+              nullable: true
+              example: 2024
+            ementa:
+              type: string
+              nullable: true
+            situacao:
+              type: string
+              nullable: true
 
     Despesa:
       type: object

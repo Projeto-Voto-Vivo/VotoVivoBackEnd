@@ -70,6 +70,10 @@ export class ParliamentarianController {
       const result =
         await this.parliamentarianService.getExpenseSummaryByParliamentarianId(
           id,
+          {
+            ano: this.getOptionalNumber(req.query.ano),
+            mes: this.getOptionalNumber(req.query.mes),
+          },
         );
 
       res.status(200).json(result);

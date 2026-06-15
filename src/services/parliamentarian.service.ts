@@ -20,6 +20,11 @@ type ListExpensesFilters = {
   pagina?: number;
 };
 
+type ExpenseSummaryFilters = {
+  ano?: number;
+  mes?: number;
+};
+
 type PaginatedFilters = {
   pagina?: number;
 };
@@ -213,17 +218,53 @@ export class ParliamentarianService {
     };
   }
 
-  async getExpenseSummaryByParliamentarianId(parliamentarianId: number) {
+  async getExpenseSummaryByParliamentarianId(
+    parliamentarianId: number,
+    filters: ExpenseSummaryFilters = {},
+  ) {
     await this.ensureParliamentarianExists(parliamentarianId);
 
-    const currentYear = new Date().getFullYear();
+    const requestedYear = this.normalizeYear(filters.ano);
+    const requestedMonth = this.normalizeMonth(filters.mes);
 
-    const [groupedExpenses, yearExpenses] = await Promise.all([
+    const latestExpense = requestedYear
+      ? null
+      : await this.prisma.expense.findFirst({
+          where: {
+            parliamentarianId,
+            expenseDate: {
+              not: null,
+            },
+          },
+          orderBy: {
+            expenseDate: 'desc',
+          },
+          select: {
+            expenseDate: true,
+          },
+        });
+
+    const summaryYear = requestedYear ?? latestExpense?.expenseDate?.getFullYear();
+    const where: any = {
+      parliamentarianId,
+    };
+
+    if (summaryYear) {
+      const startDate = new Date(summaryYear, requestedMonth ? requestedMonth - 1 : 0, 1);
+      const endDate = requestedMonth
+        ? new Date(summaryYear, requestedMonth, 1)
+        : new Date(summaryYear + 1, 0, 1);
+
+      where.expenseDate = {
+        gte: startDate,
+        lt: endDate,
+      };
+    }
+
+    const [groupedExpenses, totals] = await Promise.all([
       this.prisma.expense.groupBy({
         by: ['category'],
-        where: {
-          parliamentarianId,
-        },
+        where,
         _sum: {
           amount: true,
         },
@@ -231,29 +272,20 @@ export class ParliamentarianService {
           category: 'asc',
         },
       }),
-      this.prisma.expense.findMany({
-        where: {
-          parliamentarianId,
-          expenseDate: {
-            gte: new Date(currentYear, 0, 1),
-            lt: new Date(currentYear + 1, 0, 1),
-          },
+      this.prisma.expense.aggregate({
+        where,
+        _sum: {
+          amount: true,
         },
-        select: {
+        _max: {
           amount: true,
         },
       }),
     ]);
 
-    const totalAno = yearExpenses.reduce(
-      (sum, e) => sum + Number(e.amount ?? 0),
-      0,
-    );
-    const mediaMensal = totalAno / 12;
-    const maiorReembolso =
-      yearExpenses.length > 0
-        ? Math.max(...yearExpenses.map((e) => Number(e.amount ?? 0)))
-        : 0;
+    const totalAno = Number(totals._sum.amount ?? 0);
+    const mediaMensal = totalAno / (requestedMonth ? 1 : 12);
+    const maiorReembolso = Number(totals._max.amount ?? 0);
 
     return {
       totalAno,
@@ -389,7 +421,17 @@ export class ParliamentarianService {
     const [votes, total] = await Promise.all([
       this.prisma.vote.findMany({
         where: { parliamentarianId },
-        include: { voting: true },
+        include: {
+          voting: {
+            include: {
+              proposition: {
+                include: {
+                  propositionType: true,
+                },
+              },
+            },
+          },
+        },
         orderBy: { voting: { votingDate: 'desc' } },
         skip: (page - 1) * this.pageSize,
         take: this.pageSize,
@@ -398,16 +440,32 @@ export class ParliamentarianService {
     ]);
 
     return {
-      data: votes.map((vote) => ({
-        id: vote.voting.id,
-        data: vote.voting.votingDate
-          ? vote.voting.votingDate.toISOString().split('T')[0]
-          : null,
-        resumo: vote.voting.subjectSummary,
-        voto: vote.choice,
-        resultado: vote.voting.finalResult,
-        tipo: vote.voting.votingType,
-      })),
+      data: votes.map((vote) => {
+        const proposition = vote.voting.proposition;
+
+        return {
+          id: vote.voting.id,
+          data: vote.voting.votingDate
+            ? vote.voting.votingDate.toISOString().split('T')[0]
+            : null,
+          titulo: this.formatVotingTitle(proposition),
+          tema: proposition?.summary ?? null,
+          resumo: vote.voting.subjectSummary,
+          voto: vote.choice,
+          resultado: vote.voting.finalResult,
+          tipo: vote.voting.votingType,
+          proposicao: proposition
+            ? {
+                id: proposition.id,
+                tipo: proposition.propositionType?.sigla ?? null,
+                numero: proposition.number,
+                ano: proposition.year,
+                ementa: proposition.summary,
+                situacao: proposition.currentStatus,
+              }
+            : null,
+        };
+      }),
       meta: {
         total,
         page,
@@ -483,8 +541,44 @@ export class ParliamentarianService {
     };
   }
 
+  private formatVotingTitle(
+    proposition?: {
+      propositionType?: { sigla: string | null } | null;
+      number?: string | null;
+      year?: number | null;
+      summary?: string | null;
+    } | null,
+  ): string {
+    if (!proposition) {
+      return 'Deliberação registrada';
+    }
+
+    const type = proposition.propositionType?.sigla;
+    const number = proposition.number;
+    const year = proposition.year;
+    const identifier = [type, number, year ? String(year) : null]
+      .filter(Boolean)
+      .join(' ');
+
+    if (!identifier) {
+      return proposition.summary ?? 'Proposição vinculada';
+    }
+
+    return identifier.replace(/ (\d{4})$/, '/$1');
+  }
+
   private normalizePage(pagina?: number): number {
     return pagina && Number.isInteger(pagina) && pagina > 0 ? pagina : 1;
+  }
+
+  private normalizeYear(ano?: number): number | undefined {
+    return ano && Number.isInteger(ano) && ano > 0 ? ano : undefined;
+  }
+
+  private normalizeMonth(mes?: number): number | undefined {
+    return mes && Number.isInteger(mes) && mes >= 1 && mes <= 12
+      ? mes
+      : undefined;
   }
 
   private async ensureParliamentarianExists(id: number) {

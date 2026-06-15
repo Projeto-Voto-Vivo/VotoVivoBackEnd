@@ -238,7 +238,9 @@ describe('ParliamentarianController', () => {
         categorias: [{ tipoDespesa: 'Hospedagem', total: 850 }],
       });
 
-      const response = await request(app).get('/parlamentares/1/despesas/resumo');
+      const response = await request(app)
+        .get('/parlamentares/1/despesas/resumo')
+        .query({ ano: '2025', mes: '12' });
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual({
@@ -247,7 +249,28 @@ describe('ParliamentarianController', () => {
         maiorReembolso: 850,
         categorias: [{ tipoDespesa: 'Hospedagem', total: 850 }],
       });
-      expect(serviceMock.getExpenseSummaryByParliamentarianId).toHaveBeenCalledWith(1);
+      expect(serviceMock.getExpenseSummaryByParliamentarianId).toHaveBeenCalledWith(1, {
+        ano: 2025,
+        mes: 12,
+      });
+    });
+
+    it('should pass undefined for empty summary query params', async () => {
+      serviceMock.getExpenseSummaryByParliamentarianId.mockResolvedValue({
+        totalAno: 0,
+        mediaMensal: 0,
+        maiorReembolso: 0,
+        categorias: [],
+      });
+
+      await request(app)
+        .get('/parlamentares/1/despesas/resumo')
+        .query({ ano: '', mes: '' });
+
+      expect(serviceMock.getExpenseSummaryByParliamentarianId).toHaveBeenCalledWith(1, {
+        ano: undefined,
+        mes: undefined,
+      });
     });
 
     it('should return 400 when id is invalid', async () => {
@@ -426,7 +449,24 @@ describe('ParliamentarianController', () => {
     it('should return 200 with paginated voting history', async () => {
       serviceMock.listVotingsByParliamentarianId.mockResolvedValue({
         data: [
-          { id: 10, data: '2024-03-15', resumo: 'Votação PL 123', voto: 'YES', resultado: 'Aprovado', tipo: 'Nominal' },
+          {
+            id: 10,
+            data: '2024-03-15',
+            titulo: 'PL 123/2024',
+            tema: 'Dispõe sobre transparência legislativa.',
+            resumo: 'Votação PL 123',
+            voto: 'YES',
+            resultado: 'Aprovado',
+            tipo: 'Nominal',
+            proposicao: {
+              id: 99,
+              tipo: 'PL',
+              numero: '123',
+              ano: 2024,
+              ementa: 'Dispõe sobre transparência legislativa.',
+              situacao: 'Em tramitação',
+            },
+          },
         ],
         meta: { total: 1, page: 1, lastPage: 1, limit: 20 },
       });
