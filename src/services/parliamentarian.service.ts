@@ -498,7 +498,7 @@ export class ParliamentarianService {
 
       const dateKey = vote.voting.votingDate.toISOString().split('T')[0];
       
-      const isPresent = vote.choice !== 'ABSENT';
+      const isPresent = vote.choice !== 'AUSENTE';
 
       if (daysWithVotes.has(dateKey)) {
         if (isPresent) {

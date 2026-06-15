@@ -7,10 +7,13 @@ datasource db {
 }
 
 enum VoteChoice {
-  YES        @map("SIM")
-  NO         @map("NAO")
-  ABSTENTION @map("ABSTENCAO")
-  ABSENT     @map("AUSENTE")
+  SIM        @map("SIM")
+  NAO         @map("NAO")
+  ABSTENCAO @map("ABSTENCAO")
+  AUSENTE     @map("AUSENTE")
+	JUSTIFICADA @map("AUSENCIA JUSTIFICADA")
+	SEMREGISTRO @map("SEM REGISTRO")
+	SEMDADO @map("")
 }
 
 model Parliamentarian {
