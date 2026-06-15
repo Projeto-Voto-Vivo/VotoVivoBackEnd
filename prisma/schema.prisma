@@ -15,7 +15,8 @@ enum VoteChoice {
 
 model Parliamentarian {
   id                 Int       @id @default(autoincrement()) @map("idParlamentar")
-  apiId              Int       @unique @map("idApi")
+  apiId              String    @unique @map("idApi")
+	casa							 String?   @db.VarChar(20) @map("casa")
   role               String?   @db.VarChar(50) @map("cargo")
   civilName          String?   @db.VarChar(255) @map("nomeCivil")
   ballotName         String?   @db.VarChar(255) @map("nomeUrna")
@@ -32,6 +33,7 @@ model Parliamentarian {
   socialNetworks     SocialNetwork[]
   expenses           Expense[]
   amendmentLinks     AmendmentParliamentarian[]
+	presences          Presence[]
 
   @@map("parlamentar")
 }
@@ -49,7 +51,7 @@ model PropositionType {
 
 model Proposition {
   id             Int              @id @default(autoincrement()) @map("idProposicao")
-  apiId          Int              @unique @map("idApi")
+  apiId          String              @unique @map("idApi")
   typeId         Int?             @map("idTipoProposicao")
   number         String?          @db.VarChar(20) @map("numero")
   year           Int?             @map("ano")
@@ -61,6 +63,32 @@ model Proposition {
   authors         PropositionAuthor[]
 
   @@map("proposicao")
+}
+
+model Event {
+  id          Int        @id @default(autoincrement()) @map("idEvento")
+  apiId       String     @unique @map("idApi")
+  timestamp   DateTime?  @db.DateTime @map("dataHora")
+  description String?    @db.VarChar(255) @map("descricao")
+  type        String?    @db.VarChar(100) @map("tipo")
+  house       String?    @db.VarChar(20) @map("casa")
+
+  presences   Presence[]
+
+  @@map("evento")
+}
+
+model Presence {
+  id                Int             @id @default(autoincrement()) @map("idPresenca")
+  eventId           Int             @map("idEvento")
+  parliamentarianId Int             @map("idParlamentar")
+  status            String?         @db.VarChar(50) @map("statusPresenca")
+
+  event             Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  parliamentarian   Parliamentarian @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, parliamentarianId])
+  @@map("presenca")
 }
 
 model Voting {
