@@ -372,7 +372,7 @@ export class ParliamentarianService {
     );
   }
 
-  async listPropositionsByParliamentarianId(
+	async listPropositionsByParliamentarianId(
     parliamentarianId: number,
     filters: PaginatedFilters,
   ) {
@@ -384,6 +384,10 @@ export class ParliamentarianService {
       this.prisma.propositionAuthor.findMany({
         where: { parliamentarianId },
         include: { proposition: { include: { propositionType: true } } },
+        orderBy: [
+          { proposition: { year: 'desc' } },
+          { proposition: { id: 'desc' } }
+        ],
         skip: (page - 1) * this.pageSize,
         take: this.pageSize,
       }),
