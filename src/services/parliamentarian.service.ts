@@ -484,18 +484,45 @@ export class ParliamentarianService {
 
     const votes = await this.prisma.vote.findMany({
       where: { parliamentarianId },
-      select: { choice: true },
+      include: {
+        voting: {
+          select: { votingDate: true },
+        },
+      },
     });
 
-    const total = votes.length;
-    const faltas = votes.filter((v) => v.choice === 'ABSENT').length;
-    const taxa = total > 0 ? ((total - faltas) / total) * 100 : 0;
+    const daysWithVotes = new Map<string, boolean>();
+
+    votes.forEach((vote) => {
+      if (!vote.voting.votingDate) return;
+
+      const dateKey = vote.voting.votingDate.toISOString().split('T')[0];
+      
+      const isPresent = vote.choice !== 'ABSENT';
+
+      if (daysWithVotes.has(dateKey)) {
+        if (isPresent) {
+          daysWithVotes.set(dateKey, true);
+        }
+      } else {
+        daysWithVotes.set(dateKey, isPresent);
+      }
+    });
+
+    const totalEventos = daysWithVotes.size;
+    let faltas = 0;
+
+    daysWithVotes.forEach((estevePresente) => {
+      if (!estevePresente) faltas++;
+    });
+
+    const taxa = totalEventos > 0 ? ((totalEventos - faltas) / totalEventos) * 100 : 0;
 
     return {
       presenca: {
         sessoesDeliberativas: {
           taxa: parseFloat(taxa.toFixed(1)),
-          totalEventos: total,
+          totalEventos,
           faltas,
         },
         naoSessoesDeliberativas: {
