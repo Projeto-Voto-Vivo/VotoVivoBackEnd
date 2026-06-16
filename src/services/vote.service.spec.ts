@@ -60,6 +60,7 @@ describe('VoteService', () => {
         parliamentarianId: 1,
         votingId: 2,
         choice: 'YES' as any,
+				idApi: 'teste-mock-123',
       };
       prismaMock.vote.create.mockResolvedValue({ id: 10, ...data });
 
