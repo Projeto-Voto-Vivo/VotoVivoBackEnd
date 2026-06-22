@@ -36,15 +36,14 @@ services:
     build:
       context: ./VotoVivoFrontEnd
       dockerfile: Dockerfile
-      target: dev
+      target: runner
+      args:
+        NEXT_PUBLIC_API_URL: /api
     container_name: votovivo_web
     ports:
       - "127.0.0.1:3000:3000"
     environment:
-      NEXT_PUBLIC_API_URL: /api
       BACKEND_INTERNAL_URL: http://api:3001
-      NODE_ENV: development
-    command: npm run dev
     depends_on:
       - api
 
