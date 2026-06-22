@@ -773,6 +773,9 @@ components:
             faltas:
               type: integer
               example: 5
+            justificadas:
+              type: integer
+              example: 2
         naoSessoesDeliberativas:
           type: object
           description: Atividade nos bastidores (Comissões e outros órgãos).
@@ -787,6 +790,9 @@ components:
             faltas:
               type: integer
               example: 8
+            justificadas:
+              type: integer
+              example: 3
 
     ParlamentarPerfil:
       type: object

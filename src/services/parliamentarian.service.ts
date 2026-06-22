@@ -479,56 +479,94 @@ export class ParliamentarianService {
     };
   }
 
-  async getPresenceByParliamentarianId(parliamentarianId: number) {
+	async getPresenceByParliamentarianId(parliamentarianId: number) {
     await this.ensureParliamentarianExists(parliamentarianId);
+
+    const presences = await this.prisma.presence.findMany({
+      where: { parliamentarianId },
+      include: {
+        event: true,
+      },
+    });
 
     const votes = await this.prisma.vote.findMany({
       where: { parliamentarianId },
       include: {
         voting: {
-          select: { votingDate: true },
+          select: { votingDate: true, casa: true },
         },
       },
     });
 
-    const daysWithVotes = new Map<string, boolean>();
+    let delibTotal = 0;
+    let delibFaltas = 0;
+    let delibJustificadas = 0;
 
-    votes.forEach((vote) => {
-      if (!vote.voting.votingDate) return;
+    let naoDelibTotal = 0;
+    let naoDelibFaltas = 0;
+    let naoDelibJustificadas = 0;
 
-      const dateKey = vote.voting.votingDate.toISOString().split('T')[0];
-      
-      const isPresent = vote.choice !== 'AUSENTE';
+    presences.forEach((p) => {
+      const isDeliberativa = p.event.descricaoTipo?.toLowerCase().includes('deliberativa') ?? true;
 
-      if (daysWithVotes.has(dateKey)) {
-        if (isPresent) {
-          daysWithVotes.set(dateKey, true);
-        }
+      if (isDeliberativa) {
+        delibTotal++;
+        if (p.status === 'AUSENTE') delibFaltas++;
+        else if (p.status === 'JUSTIFICADA') delibJustificadas++;
       } else {
-        daysWithVotes.set(dateKey, isPresent);
+        naoDelibTotal++;
+        if (p.status === 'AUSENTE') naoDelibFaltas++;
+        else if (p.status === 'JUSTIFICADA') naoDelibJustificadas++;
       }
     });
 
-    const totalEventos = daysWithVotes.size;
-    let faltas = 0;
+    const senadoDaysWithVotes = new Map<string, string>();
 
-    daysWithVotes.forEach((estevePresente) => {
-      if (!estevePresente) faltas++;
+    votes.forEach((vote) => {
+      if (!vote.voting.votingDate) return;
+      
+      if (vote.voting.casa !== 'Senado') return;
+
+      const dateKey = vote.voting.votingDate.toISOString().split('T')[0];
+
+      let currentVoteStatus = 'PRESENTE';
+      if (vote.choice === 'AUSENTE') currentVoteStatus = 'AUSENTE';
+      if (vote.choice === 'AUSENCIA_JUSTIFICADA') currentVoteStatus = 'JUSTIFICADA';
+
+      if (senadoDaysWithVotes.has(dateKey)) {
+        const existingStatus = senadoDaysWithVotes.get(dateKey);
+        if (existingStatus === 'AUSENTE' && currentVoteStatus !== 'AUSENTE') {
+          senadoDaysWithVotes.set(dateKey, currentVoteStatus);
+        }
+      } else {
+        senadoDaysWithVotes.set(dateKey, currentVoteStatus);
+      }
     });
 
-    const taxa = totalEventos > 0 ? ((totalEventos - faltas) / totalEventos) * 100 : 0;
+    senadoDaysWithVotes.forEach((status) => {
+      delibTotal++;
+      if (status === 'AUSENTE') delibFaltas++;
+      else if (status === 'JUSTIFICADA') delibJustificadas++;
+    });
+
+    const calcularTaxa = (total: number, faltasNãoJustificadas: number) => {
+      if (total === 0) return 0;
+      return parseFloat((((total - faltasNãoJustificadas) / total) * 100).toFixed(1));
+    };
 
     return {
       presenca: {
         sessoesDeliberativas: {
-          taxa: parseFloat(taxa.toFixed(1)),
-          totalEventos,
-          faltas,
+          taxa: calcularTaxa(delibTotal, delibFaltas),
+          totalEventos: delibTotal,
+          faltas: delibFaltas,
+          justificadas: delibJustificadas,
         },
         naoSessoesDeliberativas: {
-          taxa: 0,
-          totalEventos: 0,
-          faltas: 0,
+          taxa: calcularTaxa(naoDelibTotal, naoDelibFaltas),
+          totalEventos: naoDelibTotal,
+          faltas: naoDelibFaltas,
+          justificadas: naoDelibJustificadas,
         },
       },
     };
