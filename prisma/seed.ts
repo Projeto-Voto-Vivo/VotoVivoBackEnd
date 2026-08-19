@@ -1,6 +1,8 @@
 import { PrismaClient, VoteChoice } from '@prisma/client';
+import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 
-const prisma = new PrismaClient();
+const adapter = new PrismaMariaDb(process.env.DATABASE_URL!);
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   await prisma.vote.deleteMany();
@@ -9,7 +11,20 @@ async function main() {
   await prisma.socialNetwork.deleteMany();
   await prisma.voting.deleteMany();
   await prisma.proposition.deleteMany();
+  await prisma.propositionType.deleteMany();
   await prisma.parliamentarian.deleteMany();
+
+  const propositionTypePL = await prisma.propositionType.create({
+    data: { sigla: 'PL', nome: 'Projeto de Lei', casa: 'Camara' },
+  });
+
+  const propositionTypePEC = await prisma.propositionType.create({
+    data: {
+      sigla: 'PEC',
+      nome: 'Proposta de Emenda à Constituição',
+      casa: 'Camara',
+    },
+  });
 
   const parliamentarian1 = await prisma.parliamentarian.create({
     data: {
@@ -26,14 +41,8 @@ async function main() {
       officeAddress: 'Anexo IV, Gabinete 101',
       socialNetworks: {
         create: [
-          {
-            platform: 'Instagram',
-            url: 'https://instagram.com/joaodasilva',
-          },
-          {
-            platform: 'X',
-            url: 'https://x.com/joaodasilva',
-          },
+          { platform: 'Instagram', url: 'https://instagram.com/joaodasilva' },
+          { platform: 'X', url: 'https://x.com/joaodasilva' },
         ],
       },
       expenses: {
@@ -82,14 +91,8 @@ async function main() {
       officeAddress: 'Anexo IV, Gabinete 202',
       socialNetworks: {
         create: [
-          {
-            platform: 'Facebook',
-            url: 'https://facebook.com/mariaoliveira',
-          },
-          {
-            platform: 'Instagram',
-            url: 'https://instagram.com/mariaoliveira',
-          },
+          { platform: 'Facebook', url: 'https://facebook.com/mariaoliveira' },
+          { platform: 'Instagram', url: 'https://instagram.com/mariaoliveira' },
         ],
       },
       expenses: {
@@ -118,8 +121,8 @@ async function main() {
   const proposition1 = await prisma.proposition.create({
     data: {
       apiId: 2001,
-      typeAbbreviation: 'PL',
-      number: 1234,
+      propositionType: { connect: { id: propositionTypePL.id } },
+      number: '1234',
       year: 2024,
       summary: 'Dispõe sobre incentivo à transparência pública digital.',
       currentStatus: 'Em tramitação',
@@ -129,50 +132,43 @@ async function main() {
   const proposition2 = await prisma.proposition.create({
     data: {
       apiId: 2002,
-      typeAbbreviation: 'PEC',
-      number: 45,
+      propositionType: { connect: { id: propositionTypePEC.id } },
+      number: '45',
       year: 2024,
-      summary: 'Altera dispositivos sobre participação cidadã em processos legislativos.',
+      summary:
+        'Altera dispositivos sobre participação cidadã em processos legislativos.',
       currentStatus: 'Aguardando parecer',
     },
   });
 
   await prisma.propositionAuthor.createMany({
     data: [
-      {
-        parliamentarianId: parliamentarian1.id,
-        propositionId: proposition1.id,
-      },
-      {
-        parliamentarianId: parliamentarian2.id,
-        propositionId: proposition1.id,
-      },
-      {
-        parliamentarianId: parliamentarian2.id,
-        propositionId: proposition2.id,
-      },
+      { parliamentarianId: parliamentarian1.id, propositionId: proposition1.id },
+      { parliamentarianId: parliamentarian2.id, propositionId: proposition1.id },
+      { parliamentarianId: parliamentarian2.id, propositionId: proposition2.id },
     ],
   });
 
   const voting1 = await prisma.voting.create({
     data: {
-      apiId: 3001,
+      apiId: '3001',
       propositionId: proposition1.id,
       votingDate: new Date('2024-03-15'),
-      subjectSummary: 'Votação do PL 1234/2024 sobre transparência pública digital.',
+      subjectSummary:
+        'Votação do PL 1234/2024 sobre transparência pública digital.',
       finalResult: 'Aprovado',
-      votingType: 'Nominal',
+      votingType: 'NOMINAL',
     },
   });
 
   const voting2 = await prisma.voting.create({
     data: {
-      apiId: 3002,
+      apiId: '3002',
       propositionId: proposition2.id,
       votingDate: new Date('2024-03-20'),
       subjectSummary: 'Votação da PEC 45/2024 sobre participação cidadã.',
       finalResult: 'Rejeitado',
-      votingType: 'Nominal',
+      votingType: 'NOMINAL',
     },
   });
 

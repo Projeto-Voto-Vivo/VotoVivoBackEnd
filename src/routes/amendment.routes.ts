@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { AmendmentController } from '../controllers/amendment.controller';
 import { AmendmentService } from '../services/amendment.service';
+import { prisma } from '../lib/prisma';
 
 const amendmentRouter = Router();
-const prisma = new PrismaClient();
 
 const amendmentService = new AmendmentService(prisma);
 const amendmentController = new AmendmentController(amendmentService);

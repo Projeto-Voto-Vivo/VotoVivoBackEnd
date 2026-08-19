@@ -1,10 +1,9 @@
 import { Router } from 'express';
-import { PrismaClient } from '@prisma/client';
 import { VoteController } from '../controllers/vote.controller';
 import { VoteService } from '../services/vote.service';
+import { prisma } from '../lib/prisma';
 
 const voteRouter = Router();
-const prisma = new PrismaClient();
 
 const voteService = new VoteService(prisma);
 const voteController = new VoteController(voteService);

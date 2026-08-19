@@ -1,3 +1,10 @@
+# Let's Encrypt certs/keys and certbot state (machine-specific, never commit private keys)
+certbot/conf
+certbot/work
+certbot/logs
+certbot/www/*
+!certbot/www/.gitkeep
+
 # Logs
 logs
 *.log

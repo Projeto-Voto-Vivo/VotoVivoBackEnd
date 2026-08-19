@@ -23,6 +23,7 @@ export class VoteService {
     parliamentarianId: number;
     votingId: number;
     choice: VoteChoice;
+		idApi: string,
   }) {
     return this.prisma.vote.create({ data });
   }

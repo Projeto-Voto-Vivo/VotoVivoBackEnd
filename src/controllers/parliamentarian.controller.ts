@@ -14,6 +14,7 @@ export class ParliamentarianController {
         nome: this.getOptionalString(req.query.nome),
         partido: this.getOptionalString(req.query.partido),
         uf: this.getOptionalString(req.query.uf),
+        pagina: this.getOptionalNumber(req.query.pagina),
       });
 
       res.status(200).json(result);
@@ -69,6 +70,10 @@ export class ParliamentarianController {
       const result =
         await this.parliamentarianService.getExpenseSummaryByParliamentarianId(
           id,
+          {
+            ano: this.getOptionalNumber(req.query.ano),
+            mes: this.getOptionalNumber(req.query.mes),
+          },
         );
 
       res.status(200).json(result);
@@ -104,6 +109,75 @@ export class ParliamentarianController {
         await this.parliamentarianService.getAmendmentSummaryByParliamentarianId(
           id,
         );
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listPropositionsByParliamentarianId = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const id = this.parsePositiveInt(req.params.id, 'id');
+      const result =
+        await this.parliamentarianService.listPropositionsByParliamentarianId(
+          id,
+          { pagina: this.getOptionalNumber(req.query.pagina) },
+        );
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listVotingsByParliamentarianId = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const id = this.parsePositiveInt(req.params.id, 'id');
+      const result =
+        await this.parliamentarianService.listVotingsByParliamentarianId(id, {
+          pagina: this.getOptionalNumber(req.query.pagina),
+        });
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getPresenceByParliamentarianId = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const id = this.parsePositiveInt(req.params.id, 'id');
+      const result =
+        await this.parliamentarianService.getPresenceByParliamentarianId(id);
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getAggregatedProfile = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const id = this.parsePositiveInt(req.params.id, 'id');
+      const result =
+        await this.parliamentarianService.getAggregatedProfile(id);
 
       res.status(200).json(result);
     } catch (error) {
