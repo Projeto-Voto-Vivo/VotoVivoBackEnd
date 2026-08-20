@@ -1,5 +1,4 @@
 import { VoteService } from './vote.service';
-import { NotFoundError } from './parliamentarian.service';
 
 describe('VoteService', () => {
   let prismaMock: any;
@@ -9,9 +8,6 @@ describe('VoteService', () => {
     prismaMock = {
       vote: {
         findMany: jest.fn(),
-        findUnique: jest.fn(),
-        create: jest.fn(),
-        delete: jest.fn(),
       },
     };
 
@@ -21,16 +17,8 @@ describe('VoteService', () => {
   describe('listVotesByVoting', () => {
     it('should return mapped votes for a voting', async () => {
       prismaMock.vote.findMany.mockResolvedValue([
-        {
-          id: 1,
-          parliamentarian: { ballotName: 'João da Silva' },
-          choice: 'YES',
-        },
-        {
-          id: 2,
-          parliamentarian: { ballotName: 'Maria Santos' },
-          choice: 'NO',
-        },
+        { id: 1, parliamentarian: { ballotName: 'João da Silva' }, choice: 'SIM' },
+        { id: 2, parliamentarian: { ballotName: 'Maria Santos' }, choice: 'NAO' },
       ]);
 
       const result = await service.listVotesByVoting(1);
@@ -41,8 +29,30 @@ describe('VoteService', () => {
       });
 
       expect(result).toEqual([
-        { id: 1, parlamentar: 'João da Silva', voto: 'YES' },
-        { id: 2, parlamentar: 'Maria Santos', voto: 'NO' },
+        { id: 1, parlamentar: 'João da Silva', voto: 'SIM' },
+        { id: 2, parlamentar: 'Maria Santos', voto: 'NAO' },
+      ]);
+    });
+
+    /**
+     * O enum antigo (`SIM|NAO|ABSTENCAO|AUSENTE|SEM_REGISTRO|AUSENCIA_JUSTIFICADA`)
+     * nao conhecia OBSTRUCAO nem NAO REGISTRADO, e o Prisma lanca erro ao ler um
+     * valor de enum desconhecido: uma unica votacao com obstrucao derrubava a
+     * rota inteira. Estes valores tem de atravessar o mapeamento intactos.
+     */
+    it('should pass the full canonical vote enum through', async () => {
+      prismaMock.vote.findMany.mockResolvedValue([
+        { id: 1, parliamentarian: { ballotName: 'A' }, choice: 'OBSTRUCAO' },
+        { id: 2, parliamentarian: { ballotName: 'B' }, choice: 'NAO_REGISTRADO' },
+        { id: 3, parliamentarian: { ballotName: 'C' }, choice: 'AUSENCIA_JUSTIFICADA' },
+      ]);
+
+      const result = await service.listVotesByVoting(1);
+
+      expect(result.map((vote) => vote.voto)).toEqual([
+        'OBSTRUCAO',
+        'NAO_REGISTRADO',
+        'AUSENCIA_JUSTIFICADA',
       ]);
     });
 
@@ -51,54 +61,6 @@ describe('VoteService', () => {
 
       const result = await service.listVotesByVoting(1);
       expect(result).toEqual([]);
-    });
-  });
-
-  describe('createVote', () => {
-    it('should create and return a vote', async () => {
-      const data = {
-        parliamentarianId: 1,
-        votingId: 2,
-        choice: 'YES' as any,
-				idApi: 'teste-mock-123',
-      };
-      prismaMock.vote.create.mockResolvedValue({ id: 10, ...data });
-
-      const result = await service.createVote(data);
-
-      expect(prismaMock.vote.create).toHaveBeenCalledWith({ data });
-      expect(result).toEqual({ id: 10, ...data });
-    });
-  });
-
-  describe('deleteVote', () => {
-    it('should delete and return the vote', async () => {
-      const existingVote = {
-        id: 1,
-        parliamentarianId: 1,
-        votingId: 2,
-        choice: 'YES',
-      };
-      prismaMock.vote.findUnique.mockResolvedValue(existingVote);
-      prismaMock.vote.delete.mockResolvedValue(existingVote);
-
-      const result = await service.deleteVote(1);
-
-      expect(prismaMock.vote.findUnique).toHaveBeenCalledWith({
-        where: { id: 1 },
-      });
-      expect(prismaMock.vote.delete).toHaveBeenCalledWith({ where: { id: 1 } });
-      expect(result).toEqual(existingVote);
-    });
-
-    it('should throw NotFoundError when vote does not exist', async () => {
-      prismaMock.vote.findUnique.mockResolvedValue(null);
-
-      await expect(service.deleteVote(999)).rejects.toBeInstanceOf(
-        NotFoundError,
-      );
-
-      expect(prismaMock.vote.delete).not.toHaveBeenCalled();
     });
   });
 });

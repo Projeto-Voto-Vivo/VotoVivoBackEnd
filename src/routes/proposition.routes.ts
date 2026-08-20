@@ -6,23 +6,10 @@ import { prisma } from '../lib/prisma';
 const propositionRouter = Router();
 
 const propositionService = new PropositionService(prisma);
-const propositionController = new PropositionController(
-  propositionService,
-);
+const propositionController = new PropositionController(propositionService);
 
-propositionRouter.get(
-  '/proposicoes',
-  propositionController.listPropositions,
-);
+propositionRouter.get('/proposicoes', propositionController.listPropositions);
 
-propositionRouter.get(
-  '/proposicoes/:id',
-  propositionController.getPropositionById,
-);
-
-propositionRouter.post(
-  '/proposicoes',
-  propositionController.createProposition,
-);
+propositionRouter.get('/proposicoes/:id', propositionController.getPropositionById);
 
 export { propositionRouter };

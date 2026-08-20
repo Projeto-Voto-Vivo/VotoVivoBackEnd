@@ -1,4 +1,5 @@
 import { PropositionService } from './proposition.service';
+import { NotFoundError } from '../errors/http-errors';
 
 describe('PropositionService', () => {
   let prismaMock: any;
@@ -9,7 +10,7 @@ describe('PropositionService', () => {
       proposition: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
-        create: jest.fn(),
+        count: jest.fn(),
       },
     };
 
@@ -17,66 +18,96 @@ describe('PropositionService', () => {
   });
 
   describe('listPropositions', () => {
-    it('should return propositions ordered by year descending', async () => {
-      const propositions = [
-        { id: 2, typeAbbreviation: 'PL', number: 100, year: 2024 },
-        { id: 1, typeAbbreviation: 'PEC', number: 10, year: 2023 },
-      ];
-      prismaMock.proposition.findMany.mockResolvedValue(propositions);
+    it('should paginate and expose casa, dataApresentacao and temas', async () => {
+      prismaMock.proposition.findMany.mockResolvedValue([
+        {
+          id: 2,
+          house: 'Camara',
+          propositionType: { sigla: 'PL' },
+          number: '100',
+          year: 2024,
+          summary: 'Ementa',
+          currentStatus: 'Em tramitação',
+          presentationDate: new Date('2024-02-01T10:00:00Z'),
+          temaProposicao: [{ tema: { descricao: 'Administração Pública' } }],
+        },
+      ]);
+      prismaMock.proposition.count.mockResolvedValue(1);
 
-      const result = await service.listPropositions();
+      const result = await service.listPropositions({ page: 2, limit: 5 });
 
-      expect(prismaMock.proposition.findMany).toHaveBeenCalledWith({
-        orderBy: { year: 'desc' },
+      // Nenhuma listagem pode varrer a tabela inteira.
+      expect(prismaMock.proposition.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 5, take: 5 }),
+      );
+      expect(result.data[0]).toEqual({
+        id: 2,
+        casa: 'Camara',
+        sigla: 'PL',
+        numero: '100',
+        ano: 2024,
+        ementa: 'Ementa',
+        situacao: 'Em tramitação',
+        dataApresentacao: '2024-02-01',
+        temas: ['Administração Pública'],
       });
-      expect(result).toEqual(propositions);
+      expect(result.meta).toEqual({ total: 1, page: 2, lastPage: 1, limit: 5 });
     });
 
-    it('should return empty list when no propositions exist', async () => {
+    it('should default to the standard page size', async () => {
       prismaMock.proposition.findMany.mockResolvedValue([]);
+      prismaMock.proposition.count.mockResolvedValue(0);
 
       const result = await service.listPropositions();
-      expect(result).toEqual([]);
+
+      expect(prismaMock.proposition.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 0, take: 20 }),
+      );
+      expect(result.data).toEqual([]);
     });
   });
 
   describe('getPropositionById', () => {
-    it('should return proposition with votings', async () => {
-      const proposition = {
+    it('should return the proposition with its bicameral journey', async () => {
+      prismaMock.proposition.findUnique.mockResolvedValue({
         id: 1,
-        typeAbbreviation: 'PL',
-        number: 123,
+        house: 'Camara',
+        propositionType: { sigla: 'PL' },
+        number: '123',
         year: 2024,
-        votings: [{ id: 1, finalResult: 'Aprovado' }],
-      };
-      prismaMock.proposition.findUnique.mockResolvedValue(proposition);
+        summary: 'Ementa',
+        currentStatus: 'Em tramitação',
+        presentationDate: new Date('2024-02-01T10:00:00Z'),
+        temaProposicao: [],
+        votings: [],
+        relations: [
+          {
+            relationType: 'MESMA_MATERIA',
+            related: {
+              id: 9,
+              house: 'Senado',
+              number: '123',
+              year: 2024,
+              propositionType: { sigla: 'PL' },
+            },
+          },
+        ],
+      });
 
       const result = await service.getPropositionById(1);
 
-      expect(prismaMock.proposition.findUnique).toHaveBeenCalledWith({
-        where: { id: 1 },
-        include: { votings: true },
-      });
-      expect(result).toEqual(proposition);
+      expect(result.jornada.mesmaMateria).toEqual([
+        { id: 9, casa: 'Senado', sigla: 'PL', numero: '123', ano: 2024 },
+      ]);
+      expect(result.jornada.principal).toBeNull();
     });
 
-    it('should return null when proposition does not exist', async () => {
+    it('should throw NotFoundError when proposition does not exist', async () => {
       prismaMock.proposition.findUnique.mockResolvedValue(null);
 
-      const result = await service.getPropositionById(999);
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('createProposition', () => {
-    it('should create and return a proposition', async () => {
-      const data = { apiId: 100, typeAbbreviation: 'PL', number: 1, year: 2024 };
-      prismaMock.proposition.create.mockResolvedValue({ id: 1, ...data });
-
-      const result = await service.createProposition(data);
-
-      expect(prismaMock.proposition.create).toHaveBeenCalledWith({ data });
-      expect(result).toEqual({ id: 1, ...data });
+      await expect(service.getPropositionById(999)).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
     });
   });
 });

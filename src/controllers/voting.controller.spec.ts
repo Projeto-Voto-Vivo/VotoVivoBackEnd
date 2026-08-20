@@ -1,7 +1,7 @@
 import express, { Router } from 'express';
 import request from 'supertest';
 import { VotingController } from './voting.controller';
-import { NotFoundError } from '../services/parliamentarian.service';
+import { NotFoundError } from '../errors/http-errors';
 import { errorHandler } from '../middlewares/error-handler';
 
 describe('VotingController', () => {
@@ -10,7 +10,6 @@ describe('VotingController', () => {
   const serviceMock = {
     listVotings: jest.fn(),
     getVotingById: jest.fn(),
-    createVoting: jest.fn(),
   };
 
   beforeEach(() => {
@@ -21,27 +20,33 @@ describe('VotingController', () => {
 
     router.get('/votacoes', controller.listVotings);
     router.get('/votacoes/:id', controller.getVotingById);
-    router.post('/votacoes', controller.createVoting);
 
     app = express();
-    app.use(express.json());
     app.use(router);
     app.use(errorHandler);
   });
 
   describe('GET /votacoes', () => {
-    it('should return 200 and list of votings', async () => {
-      serviceMock.listVotings.mockResolvedValue([
-        { id: 1, resumo: 'Votação PL 123', resultado: 'Aprovado' },
-      ]);
+    it('should return 200 and paginated votings', async () => {
+      const payload = {
+        data: [{ id: 1, resumo: 'Votação PL 123', resultado: 'Aprovado' }],
+        meta: { total: 1, page: 1, lastPage: 1, limit: 20 },
+      };
+      serviceMock.listVotings.mockResolvedValue(payload);
 
       const response = await request(app).get('/votacoes');
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual([
-        { id: 1, resumo: 'Votação PL 123', resultado: 'Aprovado' },
-      ]);
-      expect(serviceMock.listVotings).toHaveBeenCalled();
+      expect(response.body).toEqual(payload);
+      expect(serviceMock.listVotings).toHaveBeenCalledWith({ page: 1, limit: 20 });
+    });
+
+    it('should return 400 for an invalid limite', async () => {
+      const response = await request(app).get('/votacoes?limite=0');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'Parâmetro inválido: limite.' });
+      expect(serviceMock.listVotings).not.toHaveBeenCalled();
     });
 
     it('should return 500 on unexpected error', async () => {
@@ -86,32 +91,20 @@ describe('VotingController', () => {
       expect(response.body).toEqual({ message: 'Votação não encontrada.' });
     });
 
+    // Regressao: o controller lancava `Error('ID inválido')`, mensagem que o
+    // errorHandler nao reconhecia, e a resposta virava 500 em vez de 400.
+    it('should return 400 for a non-numeric id', async () => {
+      const response = await request(app).get('/votacoes/abc');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'Parâmetro inválido: id.' });
+      expect(serviceMock.getVotingById).not.toHaveBeenCalled();
+    });
+
     it('should return 500 on unexpected error', async () => {
       serviceMock.getVotingById.mockRejectedValue(new Error('Unexpected'));
 
       const response = await request(app).get('/votacoes/1');
-
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ message: 'Erro interno do servidor.' });
-    });
-  });
-
-  describe('POST /votacoes', () => {
-    it('should return 201 and created voting', async () => {
-      const body = { apiId: 200, subjectSummary: 'Nova votação' };
-      serviceMock.createVoting.mockResolvedValue({ id: 5, ...body });
-
-      const response = await request(app).post('/votacoes').send(body);
-
-      expect(response.status).toBe(201);
-      expect(response.body).toEqual({ id: 5, ...body });
-      expect(serviceMock.createVoting).toHaveBeenCalledWith(body);
-    });
-
-    it('should return 500 on unexpected error', async () => {
-      serviceMock.createVoting.mockRejectedValue(new Error('Unexpected'));
-
-      const response = await request(app).post('/votacoes').send({});
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({ message: 'Erro interno do servidor.' });

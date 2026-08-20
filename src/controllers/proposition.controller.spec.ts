@@ -1,6 +1,7 @@
 import express, { Router } from 'express';
 import request from 'supertest';
 import { PropositionController } from './proposition.controller';
+import { NotFoundError } from '../errors/http-errors';
 import { errorHandler } from '../middlewares/error-handler';
 
 describe('PropositionController', () => {
@@ -9,7 +10,6 @@ describe('PropositionController', () => {
   const serviceMock = {
     listPropositions: jest.fn(),
     getPropositionById: jest.fn(),
-    createProposition: jest.fn(),
   };
 
   beforeEach(() => {
@@ -20,26 +20,58 @@ describe('PropositionController', () => {
 
     router.get('/proposicoes', controller.listPropositions);
     router.get('/proposicoes/:id', controller.getPropositionById);
-    router.post('/proposicoes', controller.createProposition);
 
     app = express();
-    app.use(express.json());
     app.use(router);
     app.use(errorHandler);
   });
 
   describe('GET /proposicoes', () => {
-    it('should return 200 and list of propositions', async () => {
-      const propositions = [
-        { id: 1, typeAbbreviation: 'PL', number: 123, year: 2024 },
-      ];
-      serviceMock.listPropositions.mockResolvedValue(propositions);
+    it('should return 200 and paginated propositions', async () => {
+      const payload = {
+        data: [{ id: 1, sigla: 'PL', numero: '123', ano: 2024 }],
+        meta: { total: 1, page: 1, lastPage: 1, limit: 20 },
+      };
+      serviceMock.listPropositions.mockResolvedValue(payload);
 
       const response = await request(app).get('/proposicoes');
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual(propositions);
-      expect(serviceMock.listPropositions).toHaveBeenCalled();
+      expect(response.body).toEqual(payload);
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith({
+        page: 1,
+        limit: 20,
+      });
+    });
+
+    it('should forward pagina and limite to the service', async () => {
+      serviceMock.listPropositions.mockResolvedValue({ data: [], meta: {} });
+
+      await request(app).get('/proposicoes?pagina=3&limite=5');
+
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith({
+        page: 3,
+        limit: 5,
+      });
+    });
+
+    it('should cap limite at the maximum page size', async () => {
+      serviceMock.listPropositions.mockResolvedValue({ data: [], meta: {} });
+
+      await request(app).get('/proposicoes?limite=100000');
+
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith({
+        page: 1,
+        limit: 100,
+      });
+    });
+
+    it('should return 400 for an invalid pagina', async () => {
+      const response = await request(app).get('/proposicoes?pagina=abc');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'Parâmetro inválido: pagina.' });
+      expect(serviceMock.listPropositions).not.toHaveBeenCalled();
     });
 
     it('should return 500 on unexpected error', async () => {
@@ -56,8 +88,8 @@ describe('PropositionController', () => {
     it('should return 200 and proposition with votings', async () => {
       const proposition = {
         id: 1,
-        typeAbbreviation: 'PL',
-        votings: [{ id: 1, finalResult: 'Aprovado' }],
+        sigla: 'PL',
+        votacoes: [{ id: 1, resultado: 'Aprovado' }],
       };
       serviceMock.getPropositionById.mockResolvedValue(proposition);
 
@@ -68,41 +100,29 @@ describe('PropositionController', () => {
       expect(serviceMock.getPropositionById).toHaveBeenCalledWith(1);
     });
 
-    it('should return 200 with null when proposition does not exist', async () => {
-      serviceMock.getPropositionById.mockResolvedValue(null);
+    it('should return 404 when proposition does not exist', async () => {
+      serviceMock.getPropositionById.mockRejectedValue(
+        new NotFoundError('Proposição não encontrada.'),
+      );
 
       const response = await request(app).get('/proposicoes/999');
 
-      expect(response.status).toBe(200);
-      expect(response.body).toBeNull();
+      expect(response.status).toBe(404);
+      expect(response.body).toEqual({ message: 'Proposição não encontrada.' });
+    });
+
+    it('should return 400 for a non-numeric id', async () => {
+      const response = await request(app).get('/proposicoes/abc');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'Parâmetro inválido: id.' });
+      expect(serviceMock.getPropositionById).not.toHaveBeenCalled();
     });
 
     it('should return 500 on unexpected error', async () => {
       serviceMock.getPropositionById.mockRejectedValue(new Error('Unexpected'));
 
       const response = await request(app).get('/proposicoes/1');
-
-      expect(response.status).toBe(500);
-      expect(response.body).toEqual({ message: 'Erro interno do servidor.' });
-    });
-  });
-
-  describe('POST /proposicoes', () => {
-    it('should return 201 and created proposition', async () => {
-      const body = { apiId: 100, typeAbbreviation: 'PL', number: 1, year: 2024 };
-      serviceMock.createProposition.mockResolvedValue({ id: 1, ...body });
-
-      const response = await request(app).post('/proposicoes').send(body);
-
-      expect(response.status).toBe(201);
-      expect(response.body).toEqual({ id: 1, ...body });
-      expect(serviceMock.createProposition).toHaveBeenCalledWith(body);
-    });
-
-    it('should return 500 on unexpected error', async () => {
-      serviceMock.createProposition.mockRejectedValue(new Error('Unexpected'));
-
-      const response = await request(app).post('/proposicoes').send({});
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({ message: 'Erro interno do servidor.' });

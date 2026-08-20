@@ -1,5 +1,5 @@
 import { PrismaClient } from '@prisma/client';
-import { NotFoundError } from './parliamentarian.service';
+import { NotFoundError } from '../errors/http-errors';
 
 export class AmendmentService {
   constructor(private readonly prisma: PrismaClient) {}

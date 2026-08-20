@@ -8,19 +8,6 @@ const voteRouter = Router();
 const voteService = new VoteService(prisma);
 const voteController = new VoteController(voteService);
 
-voteRouter.get(
-  '/votacoes/:votingId/votos',
-  voteController.listVotesByVoting,
-);
-
-voteRouter.post(
-    '/votos',
-    voteController.createVote
-);
-
-voteRouter.delete(
-    '/votos/:id',
-    voteController.deleteVote
-);
+voteRouter.get('/votacoes/:votingId/votos', voteController.listVotesByVoting);
 
 export { voteRouter };
