@@ -10,6 +10,10 @@ const propositionController = new PropositionController(propositionService);
 
 propositionRouter.get('/proposicoes', propositionController.listPropositions);
 
+// Antes de `/proposicoes/:id`: registrada depois, a rota de id capturaria
+// "filtros" e responderia 400.
+propositionRouter.get('/proposicoes/filtros', propositionController.listFilterOptions);
+
 propositionRouter.get('/proposicoes/:id', propositionController.getPropositionById);
 
 export { propositionRouter };

@@ -7,7 +7,7 @@ info:
   version: 1.0.0-mvp
 
 servers:
-  - url: http://localhost:3001
+  - url: https://api.votovivoleg.com.br
     description: Servidor de Desenvolvimento Local
 
 paths:
@@ -623,9 +623,58 @@ paths:
   /proposicoes:
     get:
       summary: Lista proposições
+      description: >
+        Todos os filtros são aplicados no banco e `meta.total` reflete o
+        conjunto filtrado — a paginação é inteiramente do servidor, sem
+        necessidade de baixar páginas para recortar no cliente.
+        Os valores válidos de cada filtro estão em `/proposicoes/filtros`.
       tags:
         - Proposições
       parameters:
+        - in: query
+          name: tipo
+          schema:
+            type: string
+          description: >
+            Sigla do tipo (`PL`, `PEC`, `MPV`...), case-insensitive. A mesma
+            sigla existe nas duas casas; combine com `casa` para desambiguar.
+          example: PL
+        - in: query
+          name: ano
+          schema:
+            type: integer
+          description: Ano da proposição (`proposicao.ano`).
+        - in: query
+          name: casa
+          schema:
+            type: string
+            enum: [camara, senado, congresso]
+        - in: query
+          name: situacao
+          schema:
+            type: string
+          description: >
+            Casa por **substring** em `proposicao.statusAtual`, que é texto
+            livre vindo das APIs da Câmara e do Senado.
+          example: tramitação
+        - in: query
+          name: tema
+          schema:
+            type: string
+          description: >
+            Descrição exata do tema, como devolvida por `/proposicoes/filtros`.
+            A mesma descrição costuma existir nas duas casas com ids distintos;
+            o filtro alcança as duas.
+          example: Saúde
+        - in: query
+          name: busca
+          schema:
+            type: string
+          description: >
+            Busca por substring na ementa e no número. Insensível a caixa e a
+            acento (as tabelas usam `utf8mb4_unicode_ci`), então `saude`
+            encontra `Saúde`.
+          example: transparência
         - in: query
           name: pagina
           schema:
@@ -651,8 +700,120 @@ paths:
                       $ref: '#/components/schemas/ProposicaoPerfil'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+                  filtros:
+                    type: object
+                    description: Filtros efetivamente aplicados, ecoados de volta.
+                    properties:
+                      tipo:
+                        type: string
+                        nullable: true
+                      ano:
+                        type: integer
+                        nullable: true
+                      casa:
+                        type: string
+                        nullable: true
+                      situacao:
+                        type: string
+                        nullable: true
+                      tema:
+                        type: string
+                        nullable: true
+                      busca:
+                        type: string
+                        nullable: true
         '400':
           $ref: '#/components/responses/ParametroInvalido'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /proposicoes/filtros:
+    get:
+      summary: Domínios dos filtros de proposições
+      description: >
+        Valores existentes para montar os filtros da UI. Necessário sobretudo
+        para `situacao`: sendo texto livre, o cliente não teria como adivinhar
+        as redações válidas. As contagens permitem ordenar por relevância.
+
+        As opções são globais, não facetadas pelo filtro corrente.
+      tags:
+        - Proposições
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  tipos:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        sigla:
+                          type: string
+                        nome:
+                          type: string
+                        casa:
+                          type: string
+                  anos:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ano:
+                          type: integer
+                          nullable: true
+                        total:
+                          type: integer
+                  situacoes:
+                    type: array
+                    description: Ordenadas por número de proposições, decrescente.
+                    items:
+                      type: object
+                      properties:
+                        situacao:
+                          type: string
+                          nullable: true
+                        total:
+                          type: integer
+                  casas:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        casa:
+                          type: string
+                          nullable: true
+                        total:
+                          type: integer
+                  temas:
+                    type: array
+                    description: >
+                      Apenas temas com ao menos uma proposição — os demais
+                      seriam opções mortas no dropdown. Use `tema` (a descrição)
+                      no filtro; `id` é informativo.
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        tema:
+                          type: string
+                        casa:
+                          type: string
+                        total:
+                          type: integer
+                  metadata:
+                    type: object
+                    properties:
+                      situacoesTruncadasEm:
+                        type: integer
+                      observacao:
+                        type: string
         '429':
           $ref: '#/components/responses/LimiteExcedido'
         '500':

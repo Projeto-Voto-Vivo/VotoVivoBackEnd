@@ -162,8 +162,22 @@ A documentação interativa está disponível via Swagger UI após iniciar o ser
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `GET` | `/proposicoes` | Lista paginada de proposições, com casa, data de apresentação e temas |
+| `GET` | `/proposicoes` | Lista paginada, com filtros de `tipo`, `ano`, `casa`, `situacao`, `tema` e `busca` aplicados no banco |
+| `GET` | `/proposicoes/filtros` | Valores existentes de cada filtro, com contagens, para montar os dropdowns |
 | `GET` | `/proposicoes/:id` | Detalhes, incluindo a jornada bicameral (`proposicaoRelacao`) |
+
+> **`meta.total` reflete o filtro aplicado**, então a paginação é 100% do
+> servidor: o cliente não precisa varrer páginas para recortar em memória.
+> `situacao` casa por substring porque `proposicao.statusAtual` é texto livre
+> das APIs da Câmara e do Senado — e é justamente por isso que
+> `/proposicoes/filtros` existe: não há como o frontend adivinhar as redações
+> válidas.
+>
+> `busca` procura por substring na ementa e no número. Fica no servidor porque
+> busca no cliente só enxergaria a página corrente: com o universo completo
+> carregado, o termo quase sempre casa numa página que o navegador não baixou.
+> Como as tabelas usam `utf8mb4_unicode_ci`, a comparação é insensível a caixa
+> e a acento (`saude` encontra `Saúde`).
 
 #### Dashboards
 

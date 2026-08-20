@@ -22,3 +22,26 @@ export function cargoDaCasa(casa: string): string {
 
   return cargo;
 }
+
+/**
+ * `proposicao.casa` / `evento.casa` / `votacao.casa` sao enums do banco com a
+ * grafia capitalizada. Aceitamos a query em minusculas e normalizamos aqui.
+ */
+const CASA_LEGISLATIVA: Record<string, 'Camara' | 'Senado' | 'Congresso'> = {
+  camara: 'Camara',
+  senado: 'Senado',
+  congresso: 'Congresso',
+};
+
+export function casaLegislativa(
+  casa: string,
+  campo = 'casa',
+): 'Camara' | 'Senado' | 'Congresso' {
+  const valor = CASA_LEGISLATIVA[casa.toLowerCase()];
+
+  if (!valor) {
+    throw new InvalidParameterError(campo);
+  }
+
+  return valor;
+}

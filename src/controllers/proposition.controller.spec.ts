@@ -9,6 +9,7 @@ describe('PropositionController', () => {
 
   const serviceMock = {
     listPropositions: jest.fn(),
+    listFilterOptions: jest.fn(),
     getPropositionById: jest.fn(),
   };
 
@@ -19,6 +20,7 @@ describe('PropositionController', () => {
     const router = Router();
 
     router.get('/proposicoes', controller.listPropositions);
+    router.get('/proposicoes/filtros', controller.listFilterOptions);
     router.get('/proposicoes/:id', controller.getPropositionById);
 
     app = express();
@@ -38,10 +40,17 @@ describe('PropositionController', () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(payload);
-      expect(serviceMock.listPropositions).toHaveBeenCalledWith({
-        page: 1,
-        limit: 20,
-      });
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith(
+        { page: 1, limit: 20 },
+        {
+          tipo: undefined,
+          ano: undefined,
+          casa: undefined,
+          situacao: undefined,
+          tema: undefined,
+          busca: undefined,
+        },
+      );
     });
 
     it('should forward pagina and limite to the service', async () => {
@@ -49,10 +58,10 @@ describe('PropositionController', () => {
 
       await request(app).get('/proposicoes?pagina=3&limite=5');
 
-      expect(serviceMock.listPropositions).toHaveBeenCalledWith({
-        page: 3,
-        limit: 5,
-      });
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith(
+        { page: 3, limit: 5 },
+        expect.anything(),
+      );
     });
 
     it('should cap limite at the maximum page size', async () => {
@@ -60,10 +69,10 @@ describe('PropositionController', () => {
 
       await request(app).get('/proposicoes?limite=100000');
 
-      expect(serviceMock.listPropositions).toHaveBeenCalledWith({
-        page: 1,
-        limit: 100,
-      });
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith(
+        { page: 1, limit: 100 },
+        expect.anything(),
+      );
     });
 
     it('should return 400 for an invalid pagina', async () => {
@@ -126,6 +135,92 @@ describe('PropositionController', () => {
 
       expect(response.status).toBe(500);
       expect(response.body).toEqual({ message: 'Erro interno do servidor.' });
+    });
+  });
+
+  describe('GET /proposicoes com filtros', () => {
+    beforeEach(() => {
+      serviceMock.listPropositions.mockResolvedValue({ data: [], meta: {} });
+    });
+
+    /**
+     * Sem filtros no servidor o cliente precisava paginar o universo inteiro
+     * e recortar em memória — dezenas de requisições em série.
+     */
+    it('should forward tipo, ano, casa and situacao to the service', async () => {
+      await request(app).get(
+        '/proposicoes?tipo=PL&ano=2024&casa=camara&situacao=tramita%C3%A7%C3%A3o',
+      );
+
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith(
+        { page: 1, limit: 20 },
+        expect.objectContaining({
+          tipo: 'PL',
+          ano: 2024,
+          casa: 'camara',
+          situacao: 'tramitação',
+        }),
+      );
+    });
+
+    it('should treat blank filters as absent', async () => {
+      await request(app).get('/proposicoes?tipo=&ano=&situacao=%20');
+
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith(
+        { page: 1, limit: 20 },
+        {
+          tipo: undefined,
+          ano: undefined,
+          casa: undefined,
+          situacao: undefined,
+          tema: undefined,
+          busca: undefined,
+        },
+      );
+    });
+
+    it('should forward tema and busca to the service', async () => {
+      await request(app).get(
+        '/proposicoes?tema=Sa%C3%BAde&busca=transpar%C3%AAncia',
+      );
+
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith(
+        { page: 1, limit: 20 },
+        expect.objectContaining({ tema: 'Saúde', busca: 'transparência' }),
+      );
+    });
+
+    it('should return 400 for a non-numeric ano', async () => {
+      const response = await request(app).get('/proposicoes?ano=abc');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'Parâmetro inválido: ano.' });
+      expect(serviceMock.listPropositions).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /proposicoes/filtros', () => {
+    it('should return the filter domains', async () => {
+      const payload = { tipos: [], anos: [], situacoes: [], casas: [], metadata: {} };
+      serviceMock.listFilterOptions.mockResolvedValue(payload);
+
+      const response = await request(app).get('/proposicoes/filtros');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(payload);
+    });
+
+    /**
+     * Registrada depois de `/proposicoes/:id`, esta rota seria capturada pelo
+     * parâmetro e responderia 400.
+     */
+    it('should not be swallowed by the :id route', async () => {
+      serviceMock.listFilterOptions.mockResolvedValue({});
+
+      const response = await request(app).get('/proposicoes/filtros');
+
+      expect(response.status).toBe(200);
+      expect(serviceMock.getPropositionById).not.toHaveBeenCalled();
     });
   });
 });
