@@ -28,6 +28,9 @@ services:
     environment:
       DATABASE_URL: mysql://root:test@mysql_db:3306/votovivo
       PORT: 3001
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-120}
+      RATE_LIMIT_JANELA_SEGUNDOS: ${RATE_LIMIT_JANELA_SEGUNDOS:-60}
       NODE_OPTIONS: --max-old-space-size=256
     ports:
       # Expõe a API na porta 80 do servidor para a Cloudflare acessar
