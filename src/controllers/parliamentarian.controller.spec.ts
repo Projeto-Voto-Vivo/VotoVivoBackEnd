@@ -1,7 +1,7 @@
 import express, { Router } from 'express';
 import request from 'supertest';
 import { ParliamentarianController } from './parliamentarian.controller';
-import { NotFoundError } from '../services/parliamentarian.service';
+import { NotFoundError } from '../errors/http-errors';
 import { errorHandler } from '../middlewares/error-handler';
 
 describe('ParliamentarianController', () => {
@@ -18,6 +18,7 @@ describe('ParliamentarianController', () => {
     listVotingsByParliamentarianId: jest.fn(),
     getPresenceByParliamentarianId: jest.fn(),
     getAggregatedProfile: jest.fn(),
+    listCommitteesByParliamentarianId: jest.fn(),
   };
 
   beforeEach(() => {
@@ -35,6 +36,10 @@ describe('ParliamentarianController', () => {
     router.get('/parlamentares/:id/proposicoes', controller.listPropositionsByParliamentarianId);
     router.get('/parlamentares/:id/votacoes', controller.listVotingsByParliamentarianId);
     router.get('/parlamentares/:id/presenca', controller.getPresenceByParliamentarianId);
+    router.get(
+      '/parlamentares/:id/comissoes',
+      controller.listCommitteesByParliamentarianId,
+    );
     router.get('/parlamentares/:id', controller.getParliamentarianById);
 
     app = express();
@@ -301,15 +306,21 @@ describe('ParliamentarianController', () => {
 
   describe('GET /parlamentares/:id/emendas', () => {
     it('should return 200 and list of amendments', async () => {
-      serviceMock.listAmendmentsByParliamentarianId.mockResolvedValue([
-        { id: 10, codigoEmenda: 'EMD-2024-001', ano: 2024 },
-      ]);
+      const payload = {
+        data: [{ id: 10, codigoEmenda: 'EMD-2024-001', ano: 2024 }],
+        meta: { total: 1, page: 1, lastPage: 1, limit: 20 },
+      };
+      serviceMock.listAmendmentsByParliamentarianId.mockResolvedValue(payload);
 
       const response = await request(app).get('/parlamentares/1/emendas');
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual([{ id: 10, codigoEmenda: 'EMD-2024-001', ano: 2024 }]);
-      expect(serviceMock.listAmendmentsByParliamentarianId).toHaveBeenCalledWith(1);
+      // O swagger sempre prometeu {data, meta}; o service devolvia array puro.
+      expect(response.body).toEqual(payload);
+      expect(serviceMock.listAmendmentsByParliamentarianId).toHaveBeenCalledWith(1, {
+        pagina: undefined,
+        limite: undefined,
+      });
     });
 
     it('should return 400 when id is invalid', async () => {
@@ -622,6 +633,54 @@ describe('ParliamentarianController', () => {
       const response = await request(app).get('/parlamentares/1/perfil');
 
       expect(response.status).toBe(500);
+    });
+  });
+
+  describe('GET /parlamentares/:id/comissoes', () => {
+    it('should return 200 with the committees from membroOrgao', async () => {
+      const payload = {
+        data: [{ id: 7, sigla: 'CCJC', cargo: 'Titular' }],
+        meta: { total: 1, page: 1, lastPage: 1, limit: 20 },
+      };
+      serviceMock.listCommitteesByParliamentarianId.mockResolvedValue(payload);
+
+      const response = await request(app).get('/parlamentares/1/comissoes');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(payload);
+      expect(serviceMock.listCommitteesByParliamentarianId).toHaveBeenCalledWith(1, {
+        pagina: undefined,
+        limite: undefined,
+      });
+    });
+
+    it('should return 400 when id is invalid', async () => {
+      const response = await request(app).get('/parlamentares/abc/comissoes');
+
+      expect(response.status).toBe(400);
+      expect(serviceMock.listCommitteesByParliamentarianId).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when parliamentarian is not found', async () => {
+      serviceMock.listCommitteesByParliamentarianId.mockRejectedValue(
+        new NotFoundError('Parlamentar não encontrado.'),
+      );
+
+      const response = await request(app).get('/parlamentares/999/comissoes');
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('GET /parlamentares com filtro de casa', () => {
+    it('should forward casa and limite to the service', async () => {
+      serviceMock.listParliamentarians.mockResolvedValue({ data: [], meta: {} });
+
+      await request(app).get('/parlamentares?casa=senado&limite=50');
+
+      expect(serviceMock.listParliamentarians).toHaveBeenCalledWith(
+        expect.objectContaining({ casa: 'senado', limite: 50 }),
+      );
     });
   });
 });

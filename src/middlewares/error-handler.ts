@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from 'express';
-import { NotFoundError } from '../services/parliamentarian.service';
+import { InvalidParameterError, NotFoundError } from '../errors/http-errors';
 
 export function errorHandler(
   error: Error,
@@ -13,6 +13,14 @@ export function errorHandler(
     });
   }
 
+  if (error instanceof InvalidParameterError) {
+    return res.status(400).json({
+      message: error.message,
+    });
+  }
+
+  // Compatibilidade com erros antigos lancados como `Error` puro. Codigo novo
+  // deve usar `InvalidParameterError`.
   if (error.message.startsWith('Parâmetro inválido:')) {
     return res.status(400).json({
       message: error.message,

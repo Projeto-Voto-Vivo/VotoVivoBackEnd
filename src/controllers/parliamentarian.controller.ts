@@ -1,5 +1,10 @@
 import { NextFunction, Request, Response } from 'express';
 import { ParliamentarianService } from '../services/parliamentarian.service';
+import {
+  getOptionalNumber,
+  getOptionalString,
+  parsePositiveInt,
+} from '../lib/request-params';
 
 export class ParliamentarianController {
   constructor(private readonly parliamentarianService: ParliamentarianService) {}
@@ -11,10 +16,12 @@ export class ParliamentarianController {
   ) => {
     try {
       const result = await this.parliamentarianService.listParliamentarians({
-        nome: this.getOptionalString(req.query.nome),
-        partido: this.getOptionalString(req.query.partido),
-        uf: this.getOptionalString(req.query.uf),
-        pagina: this.getOptionalNumber(req.query.pagina),
+        nome: getOptionalString(req.query.nome),
+        partido: getOptionalString(req.query.partido),
+        uf: getOptionalString(req.query.uf),
+        casa: getOptionalString(req.query.casa),
+        pagina: getOptionalNumber(req.query.pagina),
+        limite: getOptionalNumber(req.query.limite),
       });
 
       res.status(200).json(result);
@@ -29,7 +36,7 @@ export class ParliamentarianController {
     next: NextFunction,
   ) => {
     try {
-      const id = this.parsePositiveInt(req.params.id, 'id');
+      const id = parsePositiveInt(req.params.id, 'id');
       const result = await this.parliamentarianService.getParliamentarianById(id);
 
       res.status(200).json(result);
@@ -44,13 +51,14 @@ export class ParliamentarianController {
     next: NextFunction,
   ) => {
     try {
-      const id = this.parsePositiveInt(req.params.id, 'id');
+      const id = parsePositiveInt(req.params.id, 'id');
 
       const result =
         await this.parliamentarianService.listExpensesByParliamentarianId(id, {
-          ano: this.getOptionalNumber(req.query.ano),
-          mes: this.getOptionalNumber(req.query.mes),
-          pagina: this.getOptionalNumber(req.query.pagina),
+          ano: getOptionalNumber(req.query.ano),
+          mes: getOptionalNumber(req.query.mes),
+          pagina: getOptionalNumber(req.query.pagina),
+          limite: getOptionalNumber(req.query.limite),
         });
 
       res.status(200).json(result);
@@ -65,14 +73,14 @@ export class ParliamentarianController {
     next: NextFunction,
   ) => {
     try {
-      const id = this.parsePositiveInt(req.params.id, 'id');
+      const id = parsePositiveInt(req.params.id, 'id');
 
       const result =
         await this.parliamentarianService.getExpenseSummaryByParliamentarianId(
           id,
           {
-            ano: this.getOptionalNumber(req.query.ano),
-            mes: this.getOptionalNumber(req.query.mes),
+            ano: getOptionalNumber(req.query.ano),
+            mes: getOptionalNumber(req.query.mes),
           },
         );
 
@@ -88,9 +96,12 @@ export class ParliamentarianController {
     next: NextFunction,
   ) => {
     try {
-      const id = this.parsePositiveInt(req.params.id, 'id');
+      const id = parsePositiveInt(req.params.id, 'id');
       const result =
-        await this.parliamentarianService.listAmendmentsByParliamentarianId(id);
+        await this.parliamentarianService.listAmendmentsByParliamentarianId(id, {
+          pagina: getOptionalNumber(req.query.pagina),
+          limite: getOptionalNumber(req.query.limite),
+        });
 
       res.status(200).json(result);
     } catch (error) {
@@ -104,7 +115,7 @@ export class ParliamentarianController {
     next: NextFunction,
   ) => {
     try {
-      const id = this.parsePositiveInt(req.params.id, 'id');
+      const id = parsePositiveInt(req.params.id, 'id');
       const result =
         await this.parliamentarianService.getAmendmentSummaryByParliamentarianId(
           id,
@@ -122,11 +133,14 @@ export class ParliamentarianController {
     next: NextFunction,
   ) => {
     try {
-      const id = this.parsePositiveInt(req.params.id, 'id');
+      const id = parsePositiveInt(req.params.id, 'id');
       const result =
         await this.parliamentarianService.listPropositionsByParliamentarianId(
           id,
-          { pagina: this.getOptionalNumber(req.query.pagina) },
+          {
+            pagina: getOptionalNumber(req.query.pagina),
+            limite: getOptionalNumber(req.query.limite),
+          },
         );
 
       res.status(200).json(result);
@@ -141,10 +155,11 @@ export class ParliamentarianController {
     next: NextFunction,
   ) => {
     try {
-      const id = this.parsePositiveInt(req.params.id, 'id');
+      const id = parsePositiveInt(req.params.id, 'id');
       const result =
         await this.parliamentarianService.listVotingsByParliamentarianId(id, {
-          pagina: this.getOptionalNumber(req.query.pagina),
+          pagina: getOptionalNumber(req.query.pagina),
+          limite: getOptionalNumber(req.query.limite),
         });
 
       res.status(200).json(result);
@@ -159,9 +174,28 @@ export class ParliamentarianController {
     next: NextFunction,
   ) => {
     try {
-      const id = this.parsePositiveInt(req.params.id, 'id');
+      const id = parsePositiveInt(req.params.id, 'id');
       const result =
         await this.parliamentarianService.getPresenceByParliamentarianId(id);
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listCommitteesByParliamentarianId = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const id = parsePositiveInt(req.params.id, 'id');
+      const result =
+        await this.parliamentarianService.listCommitteesByParliamentarianId(id, {
+          pagina: getOptionalNumber(req.query.pagina),
+          limite: getOptionalNumber(req.query.limite),
+        });
 
       res.status(200).json(result);
     } catch (error) {
@@ -175,7 +209,7 @@ export class ParliamentarianController {
     next: NextFunction,
   ) => {
     try {
-      const id = this.parsePositiveInt(req.params.id, 'id');
+      const id = parsePositiveInt(req.params.id, 'id');
       const result =
         await this.parliamentarianService.getAggregatedProfile(id);
 
@@ -184,37 +218,4 @@ export class ParliamentarianController {
       next(error);
     }
   };
-
-  private parsePositiveInt(value: string | string[], fieldName: string): number {
-    const parsed = Number(value);
-
-    if (!Number.isInteger(parsed) || parsed <= 0) {
-      throw new Error(`Parâmetro inválido: ${fieldName}.`);
-    }
-
-    return parsed;
-  }
-
-  private getOptionalString(value: unknown): string | undefined {
-    if (typeof value !== 'string') {
-      return undefined;
-    }
-
-    const trimmed = value.trim();
-    return trimmed ? trimmed : undefined;
-  }
-
-  private getOptionalNumber(value: unknown): number | undefined {
-    if (typeof value !== 'string' || value.trim() === '') {
-      return undefined;
-    }
-
-    const parsed = Number(value);
-
-    if (!Number.isFinite(parsed)) {
-      return undefined;
-    }
-
-    return parsed;
-  }
 }

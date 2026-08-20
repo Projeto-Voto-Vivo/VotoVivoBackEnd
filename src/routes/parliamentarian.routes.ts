@@ -31,6 +31,11 @@ parliamentarianRouter.get(
 );
 
 parliamentarianRouter.get(
+  '/parlamentares/:id/comissoes',
+  parliamentarianController.listCommitteesByParliamentarianId,
+);
+
+parliamentarianRouter.get(
   '/parlamentares/:id/despesas/resumo',
   parliamentarianController.getExpenseSummaryByParliamentarianId,
 );
