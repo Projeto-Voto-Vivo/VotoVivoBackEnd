@@ -48,9 +48,69 @@ npm run setup:docker:frontend
 1. Crie o arquivo `.env` na raiz do projeto:
 
 ```env
-DATABASE_URL="mysql://root@localhost:3306/votovivo"
-PORT=3000
+DATABASE_URL="mysql://root:test@localhost:3306/votovivo"
+PORT=3001
+
+# Restrição opcional de origem. Vazio (padrão) libera qualquer origem.
+CORS_ORIGINS=""
+
+# Rate limit por IP no Express. RATE_LIMIT_MAX=0 desativa.
+RATE_LIMIT_MAX=120
+RATE_LIMIT_JANELA_SEGUNDOS=60
 ```
+
+### Contrato de dados com o ETL
+
+O banco é alimentado **exclusivamente** pelo
+[VotoVivoDataAggregator](https://github.com/Projeto-Voto-Vivo/VotoVivoDataAggregator);
+esta API é somente-leitura. O `popular/schema.sql` daquele repositório é a fonte
+de verdade do schema, e `prisma/schema.prisma` tem de refletí-lo 1:1.
+
+Para verificar (exige Docker e o agregador clonado ao lado deste repositório):
+
+```bash
+npm run schema:check
+```
+
+O script sobe um MySQL descartável, carrega o SQL canônico e pede o diff ao
+Prisma. **Diff vazio = contrato intacto**; qualquer `ALTER`/`CREATE` no output é
+uma divergência a corrigir no `schema.prisma`.
+
+Duas consequências do schema atual que valem lembrar:
+
+- `parlamentar`, `proposicao` e `orgao` são únicos por `(idApi, discriminador de
+  casa)`, não por `idApi` global — buscar por `apiId` exige `findFirst` com o
+  discriminador (`role`/`house`/`casa`).
+- O enum de voto tem **sete** valores (`SIM`, `NAO`, `ABSTENCAO`, `OBSTRUCAO`,
+  `AUSENCIA JUSTIFICADA`, `AUSENTE`, `NAO REGISTRADO`). O Prisma lança erro em
+  runtime ao ler um valor de enum desconhecido, então tirar um deles derruba
+  toda votação que o contenha.
+
+### Segurança
+
+- **Somente-leitura**: não há rotas de escrita. Um teste de contrato
+  (`src/app.spec.ts`) falha se alguma for reintroduzida.
+- **CORS aberto por padrão**, apenas com o método `GET`. A API serve dados
+  públicos e é somente-leitura, e CORS **não é controle de acesso**: ele só
+  limita o que páginas web conseguem ler no navegador — `curl`, backends, apps
+  e scrapers o ignoram por completo. Restringir origem não protegeria dado
+  nenhum e bloquearia reuso legítimo dos dados; quem contém abuso é o rate
+  limit por IP.
+
+  Para restringir mesmo assim (ex.: reduzir uso do endpoint por sites de
+  terceiros), preencha `CORS_ORIGINS` com uma lista separada por vírgula.
+- **Rate limit em duas camadas**: o nginx segura o volume
+  (`limit_req_zone` a 10r/s com burst 20, e no máximo 20 conexões por IP) e o
+  Express aplica a cota por IP (`RATE_LIMIT_MAX` por
+  `RATE_LIMIT_JANELA_SEGUNDOS`), respondendo **429** com `Retry-After` e os
+  cabeçalhos `RateLimit-Limit`/`Remaining`/`Reset`.
+
+  O contador do Express é **por processo**: com N réplicas o teto efetivo é
+  `RATE_LIMIT_MAX × N`. O teto global continua sendo do nginx; não vale a pena
+  introduzir Redis enquanto houver um único proxy à frente.
+
+  `app.set('trust proxy', 1)` é pré-requisito — sem isso `req.ip` seria o IP do
+  nginx e o limite viraria global para todos os usuários de uma vez.
 
 2. Execute o script de preparação e inicie o servidor:
 
@@ -71,15 +131,16 @@ A documentação interativa está disponível via Swagger UI após iniciar o ser
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `GET` | `/parlamentares` | Lista parlamentares com filtros (`nome`, `partido`, `uf`) e paginação |
+| `GET` | `/parlamentares` | Lista parlamentares com filtros (`nome`, `partido`, `uf`, `casa`) e paginação (`pagina`, `limite`) |
 | `GET` | `/parlamentares/:id` | Perfil completo do parlamentar |
 | `GET` | `/parlamentares/:id/perfil` | Perfil agregado (visão geral, votações, proposições, despesas, emendas) |
 | `GET` | `/parlamentares/:id/despesas` | Despesas paginadas, com filtros opcionais de `ano` e `mes` |
 | `GET` | `/parlamentares/:id/despesas/resumo` | Resumo financeiro: total anual, média mensal, maior reembolso e breakdown por categoria |
 | `GET` | `/parlamentares/:id/votacoes` | Histórico paginado de votos nominais |
 | `GET` | `/parlamentares/:id/proposicoes` | Proposições das quais o parlamentar é autor, paginadas |
-| `GET` | `/parlamentares/:id/presenca` | Métricas de assiduidade (taxa, total de eventos, faltas) |
-| `GET` | `/parlamentares/:id/emendas` | Emendas parlamentares vinculadas |
+| `GET` | `/parlamentares/:id/presenca` | Assiduidade a partir da tabela `presenca`, com plenário e comissões separados e metodologia rotulada por casa |
+| `GET` | `/parlamentares/:id/comissoes` | Órgãos colegiados de que o parlamentar participa (`membroOrgao`) |
+| `GET` | `/parlamentares/:id/emendas` | Emendas vinculadas, paginadas, com `metodoVinculo` e `confiancaVinculo` |
 | `GET` | `/parlamentares/:id/emendas/resumo` | Totais agregados de emendas (empenhado, liquidado, pago) |
 
 #### Emendas
@@ -93,25 +154,34 @@ A documentação interativa está disponível via Swagger UI após iniciar o ser
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `GET` | `/votacoes` | Lista todas as votações |
-| `GET` | `/votacoes/:id` | Detalhes de uma votação com todos os votos registrados |
-| `POST` | `/votacoes` | Cria uma votação |
+| `GET` | `/votacoes` | Lista paginada de votações (`pagina`, `limite`) |
+| `GET` | `/votacoes/:id` | Detalhes de uma votação, com orientações de bancada e votos nominais |
+| `GET` | `/votacoes/:votingId/votos` | Votos de uma votação |
 
 #### Proposições
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `GET` | `/proposicoes` | Lista todas as proposições |
-| `GET` | `/proposicoes/:id` | Detalhes de uma proposição |
-| `POST` | `/proposicoes` | Cria uma proposição |
+| `GET` | `/proposicoes` | Lista paginada de proposições, com casa, data de apresentação e temas |
+| `GET` | `/proposicoes/:id` | Detalhes, incluindo a jornada bicameral (`proposicaoRelacao`) |
 
-#### Votos
+#### Dashboards
+
+Agregam em SQL e declaram a metodologia em `metadata` (métrica usada, janela e
+o que ficou de fora da conta).
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `GET` | `/votacoes/:votingId/votos` | Lista votos de uma votação |
-| `POST` | `/votos` | Registra um voto |
-| `DELETE` | `/votos/:id` | Remove um voto |
+| `GET` | `/dashboards/emendas/total` | Total nacional por `ano`, `tipo` e `metrica` (`empenhado`/`liquidado`/`pago`) |
+| `GET` | `/dashboards/emendas/top` | Ranking por parlamentar; `casa` obrigatória |
+| `GET` | `/dashboards/despesas/top` | Ranking de despesas; `casa` obrigatória, `normalizar=mes` divide pelos meses de exercício |
+| `GET` | `/dashboards/comparacao` | Compara 2 a 4 parlamentares com métricas normalizadas |
+
+> **Por que `casa` é obrigatória nos rankings.** CEAP (Câmara) e CEAPS (Senado)
+> têm tetos e regras distintos, e a presença tem cobertura diferente em cada
+> casa. Um ranking misto produz um número sem significado — por isso
+> `/dashboards/comparacao` também recusa comparar casas distintas sem
+> `permitirCasasDistintas=true`.
 
 ## Testes
 

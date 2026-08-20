@@ -34,10 +34,24 @@ paths:
             type: string
           description: Sigla do estado (ex. SP, RJ)
         - in: query
+          name: casa
+          schema:
+            type: string
+            enum: [camara, senado]
+          description: >
+            Filtra pela casa legislativa no servidor. Sem este parâmetro o cliente
+            precisaria paginar tudo e separar em memória.
+        - in: query
           name: pagina
           schema:
             type: integer
             default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
       responses:
         '200':
           description: Sucesso
@@ -52,6 +66,8 @@ paths:
                       $ref: '#/components/schemas/ParlamentarResumo'
                   meta:
                     $ref: '#/components/schemas/PaginationMeta'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -79,6 +95,8 @@ paths:
           $ref: '#/components/responses/ParametroInvalido'
         '404':
           $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -105,6 +123,8 @@ paths:
           $ref: '#/components/responses/ParametroInvalido'
         '404':
           $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -125,6 +145,12 @@ paths:
           schema:
             type: integer
             default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
       responses:
         '200':
           description: Sucesso
@@ -143,6 +169,8 @@ paths:
           $ref: '#/components/responses/ParametroInvalido'
         '404':
           $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -163,6 +191,12 @@ paths:
           schema:
             type: integer
             default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
       responses:
         '200':
           description: Sucesso
@@ -181,6 +215,8 @@ paths:
           $ref: '#/components/responses/ParametroInvalido'
         '404':
           $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -210,6 +246,8 @@ paths:
           $ref: '#/components/responses/ParametroInvalido'
         '404':
           $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -238,6 +276,12 @@ paths:
           schema:
             type: integer
             default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
       responses:
         '200':
           description: Sucesso
@@ -256,6 +300,8 @@ paths:
           $ref: '#/components/responses/ParametroInvalido'
         '404':
           $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -294,6 +340,8 @@ paths:
           $ref: '#/components/responses/ParametroInvalido'
         '404':
           $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -314,6 +362,12 @@ paths:
           schema:
             type: integer
             default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
       responses:
         '200':
           description: Sucesso
@@ -332,6 +386,8 @@ paths:
           $ref: '#/components/responses/ParametroInvalido'
         '404':
           $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -358,6 +414,8 @@ paths:
           $ref: '#/components/responses/ParametroInvalido'
         '404':
           $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -385,6 +443,8 @@ paths:
           $ref: '#/components/responses/ParametroInvalido'
         '404':
           $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -413,6 +473,500 @@ paths:
           $ref: '#/components/responses/ParametroInvalido'
         '404':
           $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /parlamentares/{id}/comissoes:
+    get:
+      summary: Comissões do parlamentar
+      description: >
+        Órgãos colegiados de que o parlamentar participa, vindos de `membroOrgao`.
+        Substitui as comissões sintéticas que o frontend gerava por módulo do ID.
+      tags:
+        - Parlamentares
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Comissao'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /votacoes:
+    get:
+      summary: Lista votações
+      description: Listagem paginada de votações das duas casas.
+      tags:
+        - Votações
+      parameters:
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VotacaoResumo'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /votacoes/{id}:
+    get:
+      summary: Detalhes de uma votação
+      description: Votação com orientações de bancada e votos nominais.
+      tags:
+        - Votações
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VotacaoDetalhe'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /votacoes/{votingId}/votos:
+    get:
+      summary: Votos de uma votação
+      tags:
+        - Votações
+      parameters:
+        - in: path
+          name: votingId
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VotoRegistrado'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /proposicoes:
+    get:
+      summary: Lista proposições
+      tags:
+        - Proposições
+      parameters:
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ProposicaoPerfil'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /proposicoes/{id}:
+    get:
+      summary: Detalhes de uma proposição
+      description: >
+        Inclui temas, data de apresentação e a jornada bicameral construída a
+        partir de `proposicaoRelacao`.
+      tags:
+        - Proposições
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProposicaoDetalhe'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /dashboards/emendas/total:
+    get:
+      summary: Total de emendas
+      description: >
+        Soma nacional sobre `emenda`. Inclui emendas de bancada e de comissão,
+        que não aparecem no ranking por parlamentar.
+      tags:
+        - Dashboards
+      parameters:
+        - in: query
+          name: ano
+          schema:
+            type: integer
+        - in: query
+          name: tipo
+          schema:
+            type: string
+          description: Tipo de emenda (ex. "Emenda Individual").
+        - in: query
+          name: metrica
+          schema:
+            type: string
+            enum: [empenhado, liquidado, pago]
+            default: empenhado
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: number
+                    format: float
+                  totalEmendas:
+                    type: integer
+                  metadata:
+                    $ref: '#/components/schemas/DashboardMetadata'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /dashboards/emendas/top:
+    get:
+      summary: Ranking de emendas por parlamentar
+      description: >
+        Emendas sem vínculo a parlamentar (autoria ambígua, bancada, comissão ou
+        ex-parlamentar) ficam fora — a diferença para o total nacional é esperada
+        e está declarada em `metadata.exclusoes`.
+      tags:
+        - Dashboards
+      parameters:
+        - in: query
+          name: casa
+          required: true
+          schema:
+            type: string
+            enum: [camara, senado]
+        - in: query
+          name: ano
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - in: query
+          name: confiancaMinima
+          schema:
+            type: number
+            default: 0
+            minimum: 0
+            maximum: 100
+          description: Piso de `confiancaVinculo` do vínculo emenda-parlamentar.
+        - in: query
+          name: metrica
+          schema:
+            type: string
+            enum: [empenhado, liquidado, pago]
+            default: empenhado
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        nomeParlamentar:
+                          type: string
+                        siglaPartido:
+                          type: string
+                        uf:
+                          type: string
+                        cargo:
+                          type: string
+                        totalEmendas:
+                          type: integer
+                        valor:
+                          type: number
+                          format: float
+                  metadata:
+                    $ref: '#/components/schemas/DashboardMetadata'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /dashboards/despesas/top:
+    get:
+      summary: Ranking de despesas por parlamentar
+      description: >
+        `casa` é obrigatório: CEAP (Câmara) e CEAPS (Senado) têm tetos e regras
+        distintos, então um ranking misto não significa nada.
+      tags:
+        - Dashboards
+      parameters:
+        - in: query
+          name: casa
+          required: true
+          schema:
+            type: string
+            enum: [camara, senado]
+        - in: query
+          name: ano
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 10
+            maximum: 100
+        - in: query
+          name: normalizar
+          schema:
+            type: string
+            enum: [mes]
+          description: >
+            Com `mes`, divide pelos meses de exercício de `mandatoExercicio` — a
+            divisão acontece em SQL, antes da ordenação.
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        nomeParlamentar:
+                          type: string
+                        siglaPartido:
+                          type: string
+                        uf:
+                          type: string
+                        total:
+                          type: number
+                          format: float
+                        mesesExercicio:
+                          type: integer
+                        totalNormalizado:
+                          type: number
+                          format: float
+                          nullable: true
+                  metadata:
+                    $ref: '#/components/schemas/DashboardMetadata'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /dashboards/comparacao:
+    get:
+      summary: Comparação entre parlamentares
+      description: >
+        Métricas normalizadas por mês de exercício, com presença rotulada por
+        metodologia. Recusa comparar casas distintas sem
+        `permitirCasasDistintas=true`.
+      tags:
+        - Dashboards
+      parameters:
+        - in: query
+          name: ids
+          required: true
+          schema:
+            type: string
+          description: IDs separados por vírgula (mínimo 2, máximo 4).
+          example: '1,2'
+        - in: query
+          name: permitirCasasDistintas
+          schema:
+            type: boolean
+            default: false
+        - in: query
+          name: metrica
+          schema:
+            type: string
+            enum: [empenhado, liquidado, pago]
+            default: empenhado
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        nomeParlamentar:
+                          type: string
+                        siglaPartido:
+                          type: string
+                        uf:
+                          type: string
+                        cargo:
+                          type: string
+                          nullable: true
+                        mesesExercicio:
+                          type: integer
+                        despesas:
+                          type: object
+                          properties:
+                            total:
+                              type: number
+                              format: float
+                            porMesDeExercicio:
+                              type: number
+                              format: float
+                              nullable: true
+                        emendas:
+                          type: object
+                          properties:
+                            metrica:
+                              type: string
+                            total:
+                              type: number
+                              format: float
+                        presenca:
+                          $ref: '#/components/schemas/PresencaResumo'
+                        alinhamento:
+                          $ref: '#/components/schemas/Alinhamento'
+                  metadata:
+                    $ref: '#/components/schemas/DashboardMetadata'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
         '500':
           $ref: '#/components/responses/ErroInterno'
 
@@ -434,6 +988,31 @@ components:
             $ref: '#/components/schemas/ErroResponse'
           example:
             message: Parlamentar não encontrado.
+    LimiteExcedido:
+      description: >
+        Limite de requisições por IP excedido. O cabeçalho `Retry-After` informa
+        em quantos segundos tentar de novo; `RateLimit-Limit`,
+        `RateLimit-Remaining` e `RateLimit-Reset` acompanham toda resposta.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Segundos até a janela reabrir.
+        RateLimit-Limit:
+          schema:
+            type: integer
+        RateLimit-Remaining:
+          schema:
+            type: integer
+        RateLimit-Reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErroResponse'
+          example:
+            message: Limite de requisições excedido. Tente novamente em instantes.
     ErroInterno:
       description: Erro interno do servidor
       content:
@@ -482,6 +1061,15 @@ components:
           type: string
           format: uri
           example: https://example.com/foto.jpg
+        cargo:
+          type: string
+          nullable: true
+          example: Deputado(a)
+        condicaoMandato:
+          type: string
+          nullable: true
+          description: Valor real de `parlamentar.condicao_mandato`.
+          example: Suplente em exercício
 
     ParlamentarDetalhe:
       allOf:
@@ -512,33 +1100,72 @@ components:
                     type: string
                   url:
                     type: string
+            historicoPartidario:
+              type: array
+              description: Filiações partidárias com suas janelas de vigência.
+              items:
+                type: object
+                properties:
+                  sigla:
+                    type: string
+                  inicio:
+                    type: string
+                    format: date
+                    nullable: true
+                  fim:
+                    type: string
+                    format: date
+                    nullable: true
+            periodosMandato:
+              type: array
+              description: Períodos de exercício do mandato.
+              items:
+                type: object
+                properties:
+                  inicio:
+                    type: string
+                    format: date
+                    nullable: true
+                  fim:
+                    type: string
+                    format: date
+                    nullable: true
+                  descricao:
+                    type: string
+                    nullable: true
 
     ProposicaoPerfil:
       type: object
       properties:
         id:
           type: integer
+        casa:
+          type: string
+          enum: [Camara, Senado, Congresso]
+          nullable: true
         sigla:
           type: string
+          nullable: true
         numero:
-          type: integer
+          type: string
+          nullable: true
         ano:
           type: integer
+          nullable: true
         ementa:
           type: string
-        resumo:
-          type: string
-        papel:
-          type: string
+          nullable: true
         situacao:
           type: string
-        tema:
-          type: array
-          items:
-            type: string
+          nullable: true
         dataApresentacao:
           type: string
           format: date
+          nullable: true
+        temas:
+          type: array
+          items:
+            type: string
 
     VotacaoPerfil:
       type: object
@@ -562,7 +1189,17 @@ components:
           description: Texto da deliberação/resultado retornado pela origem da votação.
         voto:
           type: string
-          enum: [SIM, NAO, ABSTENCAO, AUSENTE]
+          description: >
+            Enum canônico de `voto.votoRegistrado`. OBSTRUCAO e NAO REGISTRADO
+            existem no banco e precisam ser tratados pelo cliente.
+          enum:
+            - SIM
+            - NAO
+            - ABSTENCAO
+            - OBSTRUCAO
+            - AUSENCIA_JUSTIFICADA
+            - AUSENTE
+            - NAO_REGISTRADO
         resultado:
           type: string
           nullable: true
@@ -620,6 +1257,14 @@ components:
         mediaMensal:
           type: number
           format: float
+          nullable: true
+          description: >
+            Total dividido pelos meses que efetivamente têm despesa dentro do
+            exercício do mandato (nunca por 12 fixo). `null` quando não há mês
+            com dados — o cliente deve exibir "sem dados", não "R$ 0".
+        mesesConsiderados:
+          type: integer
+          description: Divisor usado em `mediaMensal`.
         maiorReembolso:
           type: number
           format: float
@@ -756,56 +1401,349 @@ components:
           format: uri
           nullable: true
 
-    PresencaResumo:
+    BaldePresenca:
       type: object
       properties:
-        sessoesDeliberativas:
+        taxa:
+          type: number
+          format: float
+          nullable: true
+          description: >
+            Presenças + faltas justificadas sobre o total. `null` quando não há
+            evento no balde — nunca 0%, que significaria ausência total.
+          example: 96.2
+        taxaEstrita:
+          type: number
+          format: float
+          nullable: true
+          description: Só presenças sobre o total; faltas justificadas não contam.
+          example: 94.1
+        total:
+          type: integer
+        presentes:
+          type: integer
+        justificadas:
+          type: integer
+        faltas:
+          type: integer
+
+    GrupoPresenca:
+      type: object
+      properties:
+        deliberativas:
+          $ref: '#/components/schemas/BaldePresenca'
+        naoDeliberativas:
+          $ref: '#/components/schemas/BaldePresenca'
+
+    PresencaResumo:
+      type: object
+      description: >
+        Calculada exclusivamente a partir da tabela `presenca`. Plenário e
+        comissão são taxas distintas e não devem ser somadas. O denominador é
+        restrito aos períodos de `mandatoExercicio` quando existem.
+      properties:
+        plenario:
+          $ref: '#/components/schemas/GrupoPresenca'
+        comissoes:
+          $ref: '#/components/schemas/GrupoPresenca'
+        excluidos:
           type: object
-          description: Atividade no palco principal (Plenário).
+          description: Eventos que ficaram fora de todas as taxas.
           properties:
-            taxa:
-              type: number
-              format: float
-              example: 95.5
-            totalEventos:
+            eventosSemClassificacao:
               type: integer
-              example: 120
-            faltas:
+              description: '`descricaoTipo` nulo ou fora das listas conhecidas.'
+            eventosSemOrgao:
               type: integer
-              example: 5
-            justificadas:
-              type: integer
-              example: 2
-        naoSessoesDeliberativas:
+              description: Sem órgão vinculado, então sem como separar plenário de comissão.
+        janela:
           type: object
-          description: Atividade nos bastidores (Comissões e outros órgãos).
           properties:
-            taxa:
-              type: number
-              format: float
-              example: 82.0
-            totalEventos:
+            restritaAoExercicio:
+              type: boolean
+              description: >
+                `false` quando o parlamentar não tem registro em
+                `mandatoExercicio` — a taxa é calculada sem recorte e isso
+                precisa aparecer na UI.
+            periodos:
+              type: array
+              items:
+                type: object
+                properties:
+                  inicio:
+                    type: string
+                    format: date
+                    nullable: true
+                  fim:
+                    type: string
+                    format: date
+                    nullable: true
+                  descricao:
+                    type: string
+                    nullable: true
+        metodologia:
+          type: array
+          description: >
+            Origem do dado por casa. Câmara e Senado têm coberturas diferentes;
+            não compare taxas entre casas sem exibir esta informação.
+          items:
+            type: object
+            properties:
+              casa:
+                type: string
+              fonte:
+                type: string
+              observacao:
+                type: string
+
+    Alinhamento:
+      type: object
+      description: >
+        "Seguiu a orientação do partido?" — comparação entre `orientacaoVotacao`
+        e o voto, usando o partido vigente na DATA da votação. Só existe para a
+        Câmara: o agregador não coleta orientação de bancada do Senado.
+      properties:
+        disponivel:
+          type: boolean
+        motivo:
+          type: string
+          description: Preenchido quando `disponivel` é false.
+          example: ORIENTACAO_INDISPONIVEL_SENADO
+        taxa:
+          type: number
+          format: float
+          nullable: true
+        seguiu:
+          type: integer
+        divergiu:
+          type: integer
+        consideradas:
+          type: integer
+        liberadas:
+          type: integer
+          description: Votos com orientação "Liberado"/"Artigo 17", fora do denominador.
+        fonteFiliacao:
+          type: string
+          enum: [historico, partidoAtual]
+          description: >
+            `partidoAtual` indica que não havia histórico de filiação e o partido
+            atual foi usado como aproximação.
+
+    Comissao:
+      type: object
+      properties:
+        id:
+          type: integer
+        sigla:
+          type: string
+          nullable: true
+        nome:
+          type: string
+          nullable: true
+        tipoOrgao:
+          type: string
+          nullable: true
+        casa:
+          type: string
+          enum: [Camara, Senado, Congresso]
+        cargo:
+          type: string
+          nullable: true
+
+    VotacaoResumo:
+      type: object
+      properties:
+        id:
+          type: integer
+        apiId:
+          type: string
+        casa:
+          type: string
+          enum: [Camara, Senado, Congresso]
+        data:
+          type: string
+          format: date-time
+          nullable: true
+        resumo:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        tipo:
+          type: string
+          nullable: true
+          enum: [NOMINAL, SIMBOLICA, SECRETA]
+        proposicao:
+          type: object
+          nullable: true
+          properties:
+            id:
               type: integer
-              example: 45
-            faltas:
+            tipo:
+              type: string
+              nullable: true
+            numero:
+              type: string
+              nullable: true
+            ano:
               type: integer
-              example: 8
-            justificadas:
-              type: integer
-              example: 3
+              nullable: true
+
+    VotacaoDetalhe:
+      type: object
+      properties:
+        id:
+          type: integer
+        casa:
+          type: string
+        data:
+          type: string
+          format: date-time
+          nullable: true
+        resumo:
+          type: string
+          nullable: true
+        resultado:
+          type: string
+          nullable: true
+        tipo:
+          type: string
+          nullable: true
+        orientacoes:
+          type: array
+          description: Orientação de cada bancada. Só a Câmara possui este dado.
+          items:
+            type: object
+            properties:
+              bancada:
+                type: string
+              orientacao:
+                type: string
+                nullable: true
+        votos:
+          type: array
+          items:
+            type: object
+            properties:
+              parlamentar:
+                type: string
+                nullable: true
+              voto:
+                type: string
+                enum:
+                  - SIM
+                  - NAO
+                  - ABSTENCAO
+                  - OBSTRUCAO
+                  - AUSENCIA_JUSTIFICADA
+                  - AUSENTE
+                  - NAO_REGISTRADO
+
+    VotoRegistrado:
+      type: object
+      properties:
+        id:
+          type: integer
+        parlamentar:
+          type: string
+          nullable: true
+        voto:
+          type: string
+          enum:
+            - SIM
+            - NAO
+            - ABSTENCAO
+            - OBSTRUCAO
+            - AUSENCIA_JUSTIFICADA
+            - AUSENTE
+            - NAO_REGISTRADO
+
+    ProposicaoDetalhe:
+      allOf:
+        - $ref: '#/components/schemas/ProposicaoPerfil'
+        - type: object
+          properties:
+            jornada:
+              type: object
+              description: >
+                Relações de `proposicaoRelacao`. `mesmaMateria` liga a mesma
+                matéria entre Câmara e Senado, que antes apareciam desconexas.
+              properties:
+                mesmaMateria:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ProposicaoReferencia'
+                principal:
+                  allOf:
+                    - $ref: '#/components/schemas/ProposicaoReferencia'
+                  nullable: true
+                anteriores:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ProposicaoReferencia'
+                posteriores:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ProposicaoReferencia'
+            votacoes:
+              type: array
+              items:
+                $ref: '#/components/schemas/VotacaoResumo'
+
+    ProposicaoReferencia:
+      type: object
+      properties:
+        id:
+          type: integer
+        casa:
+          type: string
+          nullable: true
+        sigla:
+          type: string
+          nullable: true
+        numero:
+          type: string
+          nullable: true
+        ano:
+          type: integer
+          nullable: true
+
+    DashboardMetadata:
+      type: object
+      description: >
+        Metodologia do agregado. Toda métrica monetária declara qual valor do
+        ciclo orçamentário usou e o que ficou de fora da conta.
+      properties:
+        metrica:
+          type: string
+        casa:
+          type: string
+        janela:
+          type: object
+        exclusoes:
+          type: array
+          items:
+            type: string
+        observacao:
+          type: string
 
     ParlamentarPerfil:
       type: object
       properties:
         visaoGeral:
           $ref: '#/components/schemas/ParlamentarDetalhe'
+        comissoes:
+          type: array
+          items:
+            $ref: '#/components/schemas/Comissao'
         votacoes:
           type: object
           properties:
             presenca:
               $ref: '#/components/schemas/PresencaResumo'
             alinhamento:
-              type: number
+              $ref: '#/components/schemas/Alinhamento'
             recentes:
               type: array
               items:
@@ -814,8 +1752,6 @@ components:
           type: object
           properties:
             total:
-              type: integer
-            aprovadas:
               type: integer
             recentes:
               type: array
