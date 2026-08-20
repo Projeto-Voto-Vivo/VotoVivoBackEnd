@@ -1,3 +1,13 @@
+// Fonte da verdade: VotoVivoDataAggregator/popular/schema.sql (pos-migracoes 2026-08-19).
+// Convencao: model/campo em ingles + @map/@@map para as tabelas/colunas em portugues,
+// que sao os nomes que o ETL escreve. Os `map:` de indices, uniques e foreign keys
+// reproduzem exatamente os nomes gerados pelo MySQL - nao renomeie sem rodar
+// `npm run schema:check`, que exige diff vazio contra o schema.sql canonico.
+//
+// ATENCAO: `parlamentar`, `proposicao` e `orgao` sao unicos por (idApi, discriminador
+// de casa), nao por idApi global. Buscar por apiId exige `findFirst` com o
+// discriminador (role/house/casa) - `findUnique({ where: { apiId } })` e ambiguo.
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -8,7 +18,7 @@ datasource db {
 
 model Parliamentarian {
   id                 Int                        @id @default(autoincrement()) @map("idParlamentar")
-  apiId              String?                    @unique(map: "idApi") @map("idApi") @db.VarChar(100)
+  apiId              String                     @map("idApi") @db.VarChar(50)
   role               String?                    @map("cargo") @db.VarChar(50)
   civilName          String?                    @map("nomeCivil") @db.VarChar(255)
   ballotName         String?                    @map("nomeUrna") @db.VarChar(255)
@@ -19,14 +29,53 @@ model Parliamentarian {
   email              String?                    @db.VarChar(255)
   phone              String?                    @map("telefone") @db.VarChar(20)
   officeAddress      String?                    @map("enderecoGabinete") @db.VarChar(500)
+  mandateCondition   String?                    @default("Titular") @map("condicao_mandato") @db.VarChar(50)
   propositionAuthors PropositionAuthor[]
   expenses           Expense[]
   amendmentLinks     AmendmentParliamentarian[]
+  partyAffiliations  PartyAffiliation[]
+  mandateTerms       MandateTerm[]
+  orgaoMemberships   OrgaoMembership[]
   presences          Presence[]
   socialNetworks     SocialNetwork[]
   votes              Vote[]
 
+  @@unique([apiId, role], map: "unique_parlamentar_api")
   @@map("parlamentar")
+}
+
+model Party {
+  id      Int     @id @default(autoincrement()) @map("idPartido")
+  apiId   String? @map("idApi") @db.VarChar(50)
+  acronym String  @unique(map: "sigla") @map("sigla") @db.VarChar(50)
+  name    String? @map("nome") @db.VarChar(255)
+  logoUrl String? @map("urlLogo") @db.VarChar(500)
+
+  @@map("partido")
+}
+
+model PartyAffiliation {
+  id                Int             @id @default(autoincrement()) @map("idFiliacao")
+  parliamentarianId Int             @map("idParlamentar")
+  party             String          @map("siglaPartido") @db.VarChar(50)
+  startDate         DateTime?       @map("dataInicio") @db.Date
+  endDate           DateTime?       @map("dataFim") @db.Date
+  parliamentarian   Parliamentarian @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "filiacaoPartidaria_ibfk_1")
+
+  @@unique([parliamentarianId, party, startDate], map: "unique_filiacao")
+  @@map("filiacaoPartidaria")
+}
+
+model MandateTerm {
+  id                Int             @id @default(autoincrement()) @map("idMandatoExercicio")
+  parliamentarianId Int             @map("idParlamentar")
+  startDate         DateTime        @map("dataInicio") @db.Date
+  endDate           DateTime?       @map("dataFim") @db.Date
+  description       String?         @map("descricaoParticipacao") @db.VarChar(100)
+  parliamentarian   Parliamentarian @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "mandatoExercicio_ibfk_1")
+
+  @@unique([parliamentarianId, startDate], map: "unique_exercicio")
+  @@map("mandatoExercicio")
 }
 
 model PropositionType {
@@ -41,32 +90,78 @@ model PropositionType {
 }
 
 model Proposition {
-  id              Int                 @id @default(autoincrement()) @map("idProposicao")
-  apiId           String?             @unique(map: "idApi") @map("idApi") @db.VarChar(100)
-  typeId          Int?                @map("idTipoProposicao")
-  number          String?             @map("numero") @db.VarChar(20)
-  year            Int?                @map("ano")
-  summary         String?             @map("ementa") @db.Text
-  currentStatus   String?             @map("statusAtual") @db.VarChar(255)
-  authors         PropositionAuthor[]
-  propositionType PropositionType?    @relation(fields: [typeId], references: [id], onUpdate: NoAction, map: "proposicao_ibfk_1")
-  temaProposicao  temaProposicao[]
-  tramitacao      tramitacao[]
-  votings         Voting[]
+  id               Int                   @id @default(autoincrement()) @map("idProposicao")
+  apiId            String                @map("idApi") @db.VarChar(50)
+  house            proposicao_casa?      @map("casa")
+  typeId           Int?                  @map("idTipoProposicao")
+  number           String?               @map("numero") @db.VarChar(20)
+  year             Int?                  @map("ano")
+  summary          String?               @map("ementa") @db.Text
+  currentStatus    String?               @map("statusAtual") @db.VarChar(255)
+  presentationDate DateTime?             @map("dataApresentacao") @db.DateTime(0)
+  authors          PropositionAuthor[]
+  propositionType  PropositionType?      @relation(fields: [typeId], references: [id], onUpdate: NoAction, map: "proposicao_ibfk_1")
+  relations        PropositionRelation[] @relation("relacaoOrigem")
+  relatedBy        PropositionRelation[] @relation("relacaoDestino")
+  temaProposicao   temaProposicao[]
+  tramitacao       tramitacao[]
+  votings          Voting[]
 
+  @@unique([apiId, house], map: "unique_proposicao_api")
   @@index([typeId], map: "idTipoProposicao")
   @@map("proposicao")
 }
 
+model PropositionRelation {
+  id            Int                           @id @default(autoincrement()) @map("idProposicaoRelacao")
+  propositionId Int                           @map("idProposicao")
+  relatedId     Int                           @map("idProposicaoRelacionada")
+  relationType  proposicaoRelacao_tipoRelacao @map("tipoRelacao")
+  proposition   Proposition                   @relation("relacaoOrigem", fields: [propositionId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "proposicaoRelacao_ibfk_1")
+  related       Proposition                   @relation("relacaoDestino", fields: [relatedId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "proposicaoRelacao_ibfk_2")
+
+  @@unique([propositionId, relatedId, relationType], map: "unique_proposicao_relacao")
+  @@index([relatedId], map: "idProposicaoRelacionada")
+  @@map("proposicaoRelacao")
+}
+
+model orgao {
+  idOrgao     Int               @id @default(autoincrement())
+  idApi       String            @db.VarChar(50)
+  sigla       String?           @db.VarChar(50)
+  nome        String?           @db.VarChar(500)
+  casa        orgao_casa
+  tipoOrgao   String?           @db.VarChar(100)
+  evento      Event[]
+  memberships OrgaoMembership[]
+  votacao     Voting[]
+
+  @@unique([idApi, casa], map: "unique_orgao_api")
+}
+
+model OrgaoMembership {
+  id                Int             @id @default(autoincrement()) @map("idMembroOrgao")
+  parliamentarianId Int             @map("idParlamentar")
+  orgaoId           Int             @map("idOrgao")
+  role              String?         @map("cargo") @db.VarChar(100)
+  parliamentarian   Parliamentarian @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "membroOrgao_ibfk_1")
+  orgao             orgao           @relation(fields: [orgaoId], references: [idOrgao], onDelete: Cascade, onUpdate: NoAction, map: "membroOrgao_ibfk_2")
+
+  @@unique([parliamentarianId, orgaoId, role], map: "unique_membro_orgao")
+  @@index([orgaoId], map: "idOrgao")
+  @@map("membroOrgao")
+}
+
 model Event {
   id             Int         @id @default(autoincrement()) @map("idEvento")
-  apiId          String?     @unique(map: "idApi") @map("idApi") @db.VarChar(100)
+  apiId          String      @unique(map: "idApi") @map("idApi") @db.VarChar(50)
   house          evento_casa @map("casa")
   idOrgao        Int?
   dataHoraInicio DateTime?   @db.DateTime(0)
   descricaoTipo  String?     @db.VarChar(100)
   orgao          orgao?      @relation(fields: [idOrgao], references: [idOrgao], onUpdate: NoAction, map: "evento_ibfk_1")
   presences      Presence[]
+  votings        Voting[]
 
   @@index([idOrgao], map: "idOrgao")
   @@map("evento")
@@ -88,31 +183,46 @@ model Presence {
 
 model Voting {
   id             Int                  @id @default(autoincrement()) @map("idVotacao")
-  apiId          String?              @unique(map: "idApi") @map("idApi") @db.VarChar(100)
+  apiId          String               @unique(map: "idApi") @map("idApi") @db.VarChar(50)
   casa           votacao_casa
   propositionId  Int?                 @map("idProposicao")
   idOrgao        Int?
+  eventId        Int?                 @map("idEvento")
   votingDate     DateTime?            @map("dataHora") @db.DateTime(0)
   subjectSummary String?              @map("resumoMateria") @db.Text
   finalResult    String?              @map("resultadoFinal") @db.VarChar(100)
   votingType     votacao_tipoVotacao? @map("tipoVotacao")
+  orientations   VotingOrientation[]
   proposition    Proposition?         @relation(fields: [propositionId], references: [id], onUpdate: NoAction, map: "votacao_ibfk_1")
   orgao          orgao?               @relation(fields: [idOrgao], references: [idOrgao], onUpdate: NoAction, map: "votacao_ibfk_2")
+  event          Event?               @relation(fields: [eventId], references: [id], onUpdate: NoAction, map: "votacao_ibfk_3")
   votes          Vote[]
 
+  @@index([eventId], map: "idEvento")
   @@index([idOrgao], map: "idOrgao")
   @@index([propositionId], map: "idProposicao")
   @@map("votacao")
 }
 
+model VotingOrientation {
+  id          Int     @id @default(autoincrement()) @map("idOrientacaoVotacao")
+  votingId    Int     @map("idVotacao")
+  bench       String  @map("siglaBancada") @db.VarChar(100)
+  orientation String? @map("orientacao") @db.VarChar(50)
+  voting      Voting  @relation(fields: [votingId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "orientacaoVotacao_ibfk_1")
+
+  @@unique([votingId, bench], map: "unique_orientacao_votacao")
+  @@map("orientacaoVotacao")
+}
+
 model Vote {
-  id                Int                 @id @default(autoincrement()) @map("idVoto")
-  parliamentarianId Int                 @map("idParlamentar")
-  votingId          Int                 @map("idVotacao")
-  idApi             String              @unique(map: "idApi") @db.VarChar(50)
-  choice            VoteChoice @map("votoRegistrado")
-  parliamentarian   Parliamentarian     @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "voto_ibfk_1")
-  voting            Voting              @relation(fields: [votingId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "voto_ibfk_2")
+  id                Int             @id @default(autoincrement()) @map("idVoto")
+  parliamentarianId Int             @map("idParlamentar")
+  votingId          Int             @map("idVotacao")
+  idApi             String          @unique(map: "idApi") @db.VarChar(50)
+  choice            VoteChoice      @map("votoRegistrado")
+  parliamentarian   Parliamentarian @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "voto_ibfk_1")
+  voting            Voting          @relation(fields: [votingId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "voto_ibfk_2")
 
   @@index([parliamentarianId], map: "idParlamentar")
   @@index([votingId], map: "idVotacao")
@@ -143,6 +253,7 @@ model SocialNetwork {
 
 model Expense {
   id                Int             @id @default(autoincrement()) @map("idDespesa")
+  apiId             String          @unique(map: "unique_despesa_api") @map("idApi") @db.VarChar(100)
   parliamentarianId Int             @map("idParlamentar")
   expenseDate       DateTime?       @map("dataDespesa") @db.Date
   amount            Decimal?        @map("valor") @db.Decimal(10, 2)
@@ -187,7 +298,7 @@ model Amendment {
 model AmendmentDocument {
   id                Int       @id @default(autoincrement()) @map("idEmendaDocumento")
   amendmentId       Int       @map("idEmenda")
-  apiId             Int?      @map("idApi")
+  apiId             String?   @map("idApi") @db.VarChar(50)
   amendmentCode     String    @map("codigoEmenda") @db.VarChar(100)
   date              DateTime? @map("data") @db.Date
   phase             String?   @map("fase") @db.VarChar(100)
@@ -225,22 +336,42 @@ model AmendmentParliamentarian {
 }
 
 model etlCheckpoint {
-  idEtlCheckpoint Int       @id @default(autoincrement())
-  nomeScript      String    @unique(map: "nomeScript") @db.VarChar(100)
-  ultimoParametro String    @db.VarChar(255)
-  dataAtualizacao DateTime? @default(now()) @db.DateTime(0)
+  idEtlCheckpoint Int                  @id @default(autoincrement())
+  nomeScript      String               @unique(map: "nomeScript") @db.VarChar(100)
+  ultimoParametro String               @db.VarChar(255)
+  status          etlCheckpoint_status @default(EM_PROGRESSO)
+  dataAtualizacao DateTime?            @default(now()) @db.DateTime(0)
 
   @@index([nomeScript], map: "idx_etl_checkpoint_script")
 }
 
-model orgao {
-  idOrgao Int        @id @default(autoincrement())
-  idApi   String     @unique(map: "idApi") @db.VarChar(50)
-  sigla   String?    @db.VarChar(50)
-  nome    String?    @db.VarChar(500)
-  casa    orgao_casa
-  evento  Event[]
-  votacao Voting[]
+model etlExecucao {
+  idEtlExecucao     Int                @id @default(autoincrement())
+  nomeScript        String             @db.VarChar(100)
+  dataInicio        DateTime           @db.DateTime(0)
+  dataFim           DateTime?          @db.DateTime(0)
+  status            etlExecucao_status @default(EM_EXECUCAO)
+  itensProcessados  Int                @default(0)
+  registrosGravados Int                @default(0)
+  erros             Int                @default(0)
+  detalhe           String?            @db.VarChar(500)
+
+  @@index([nomeScript, dataInicio], map: "idx_etl_execucao_script")
+}
+
+model etlErro {
+  idEtlErro        Int       @id @default(autoincrement())
+  nomeScript       String    @db.VarChar(100)
+  chaveItem        String    @db.VarChar(255)
+  erro             String?   @db.Text
+  payload          String?   @db.MediumText
+  tentativas       Int       @default(1)
+  resolvido        Boolean   @default(false)
+  dataPrimeiroErro DateTime? @default(now()) @db.DateTime(0)
+  dataUltimoErro   DateTime? @default(now()) @db.DateTime(0)
+
+  @@unique([nomeScript, chaveItem], map: "unique_erro_item")
+  @@index([nomeScript, resolvido], map: "idx_etl_erro_pendentes")
 }
 
 model tema {
@@ -270,7 +401,7 @@ model temaProposicao {
 
 model tipoTramitacao {
   idTipoTramitacao Int     @id @default(autoincrement())
-  idApi            Int     @unique(map: "idApi")
+  idApi            String  @unique(map: "idApi") @db.VarChar(50)
   descricao        String? @db.VarChar(255)
   regime           String? @db.VarChar(100)
 }
@@ -298,6 +429,12 @@ enum evento_casa {
   Congresso
 }
 
+enum proposicao_casa {
+  Camara
+  Senado
+  Congresso
+}
+
 enum tema_casa {
   Camara
   Senado
@@ -309,10 +446,29 @@ enum votacao_casa {
   Congresso
 }
 
+enum etlCheckpoint_status {
+  EM_PROGRESSO
+  CONCLUIDO
+}
+
+enum etlExecucao_status {
+  EM_EXECUCAO
+  SUCESSO
+  FALHA
+  INTERROMPIDO
+}
+
 enum presenca_statusPresenca {
   PRESENTE
   AUSENTE
   JUSTIFICADA
+}
+
+enum proposicaoRelacao_tipoRelacao {
+  PRINCIPAL
+  ANTERIOR
+  POSTERIOR
+  MESMA_MATERIA
 }
 
 enum tipoProposicao_casa {
@@ -337,9 +493,10 @@ enum VoteChoice {
   SIM
   NAO
   ABSTENCAO
-  AUSENTE
-  SEM_REGISTRO         @map("SEM REGISTRO")
+  OBSTRUCAO
   AUSENCIA_JUSTIFICADA @map("AUSENCIA JUSTIFICADA")
+  AUSENTE
+  NAO_REGISTRADO       @map("NAO REGISTRADO")
 }
 
 enum votacao_tipoVotacao {

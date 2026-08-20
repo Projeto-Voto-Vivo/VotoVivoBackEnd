@@ -10,7 +10,6 @@
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:seed": "prisma db seed",
-    "db:reset": "prisma migrate reset",
     "setup:local": "bash setup.local.sh",
     "setup:docker": "bash setup.sh",
     "setup:docker:frontend": "bash setup.sh --with-frontend",
@@ -18,7 +17,8 @@
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "prisma:pull": "prisma db pull",
-    "prisma:studio": "prisma studio"
+    "prisma:studio": "prisma studio",
+    "schema:check": "bash scripts/schema-check.sh"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.8.0",
