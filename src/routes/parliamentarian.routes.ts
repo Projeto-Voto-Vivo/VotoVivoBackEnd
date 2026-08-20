@@ -31,6 +31,11 @@ parliamentarianRouter.get(
 );
 
 parliamentarianRouter.get(
+  '/parlamentares/:id/temas',
+  parliamentarianController.getThemeProfileByParliamentarianId,
+);
+
+parliamentarianRouter.get(
   '/parlamentares/:id/comissoes',
   parliamentarianController.listCommitteesByParliamentarianId,
 );

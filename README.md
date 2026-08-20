@@ -140,8 +140,24 @@ A documentação interativa está disponível via Swagger UI após iniciar o ser
 | `GET` | `/parlamentares/:id/proposicoes` | Proposições das quais o parlamentar é autor, paginadas |
 | `GET` | `/parlamentares/:id/presenca` | Assiduidade a partir da tabela `presenca`, com plenário e comissões separados e metodologia rotulada por casa |
 | `GET` | `/parlamentares/:id/comissoes` | Órgãos colegiados de que o parlamentar participa (`membroOrgao`) |
+| `GET` | `/parlamentares/:id/temas` | Perfil temático: em que temas mais legisla e como vota em proposições de cada tema |
 | `GET` | `/parlamentares/:id/emendas` | Emendas vinculadas, paginadas, com `metodoVinculo` e `confiancaVinculo` |
 | `GET` | `/parlamentares/:id/emendas/resumo` | Totais agregados de emendas (empenhado, liquidado, pago) |
+
+> **Como ler `/parlamentares/:id/temas`.** O endpoint cruza `autoriaProposicao`
+> e `voto` com `temaProposicao`, e três ressalvas viajam no `metadata` porque
+> mudam a leitura do número:
+>
+> 1. Uma proposição com vários temas conta em **cada** um deles — a soma da
+>    lista por tema é maior que `totalProposicoes`. Exiba os dois.
+> 2. Votos em votações sem proposição (requerimentos, questões de ordem) e em
+>    proposições sem tema não classificam e aparecem em `excluidos`, em vez de
+>    sumirem em silêncio.
+> 3. `votosSim`/`votosNao` é o voto registrado em votações **de proposições** do
+>    tema, não posição sobre o tema: a votação pode ser sobre destaque
+>    supressivo, requerimento de urgência ou texto principal, e o objeto do voto
+>    não é distinguível no dado. Rotular como "apoia o tema" seria afirmar mais
+>    do que o dado sustenta.
 
 #### Emendas
 

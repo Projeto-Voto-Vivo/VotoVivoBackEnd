@@ -11,6 +11,7 @@ import {
 } from '../domain/presence';
 import { cargoDaCasa } from '../lib/casas';
 import { AlignmentService } from './alignment.service';
+import { ThemeProfileService } from './theme-profile.service';
 import {
   buildMeta,
   Pagination,
@@ -59,9 +60,11 @@ type PaginatedFilters = {
 
 export class ParliamentarianService {
   private readonly alignmentService: AlignmentService;
+  private readonly themeProfileService: ThemeProfileService;
 
   constructor(private readonly prisma: PrismaClient) {
     this.alignmentService = new AlignmentService(prisma);
+    this.themeProfileService = new ThemeProfileService(prisma);
   }
 
   async listParliamentarians(filters: ListParliamentariansFilters) {
@@ -222,6 +225,20 @@ export class ParliamentarianService {
       })),
       meta: buildMeta(total, page, limit),
     };
+  }
+
+  /**
+   * Em que temas o parlamentar mais legisla e como vota em proposições de cada
+   * tema. Ver `ThemeProfileService` para as ressalvas metodológicas — elas
+   * viajam no `metadata` do payload.
+   */
+  async getThemeProfileByParliamentarianId(
+    parliamentarianId: number,
+    limite?: number,
+  ) {
+    await this.ensureParliamentarianExists(parliamentarianId);
+
+    return this.themeProfileService.getThemeProfile(parliamentarianId, limite);
   }
 
   async listExpensesByParliamentarianId(

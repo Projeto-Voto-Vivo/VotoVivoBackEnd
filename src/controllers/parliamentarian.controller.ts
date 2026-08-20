@@ -203,6 +203,30 @@ export class ParliamentarianController {
     }
   };
 
+  getThemeProfileByParliamentarianId = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const id = parsePositiveInt(req.params.id, 'id');
+      const limite =
+        req.query.limite === undefined || req.query.limite === ''
+          ? undefined
+          : parsePositiveInt(req.query.limite, 'limite');
+
+      const result =
+        await this.parliamentarianService.getThemeProfileByParliamentarianId(
+          id,
+          limite,
+        );
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getAggregatedProfile = async (
     req: Request,
     res: Response,

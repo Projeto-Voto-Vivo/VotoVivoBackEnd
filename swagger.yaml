@@ -478,6 +478,52 @@ paths:
         '500':
           $ref: '#/components/responses/ErroInterno'
 
+  /parlamentares/{id}/temas:
+    get:
+      summary: Perfil temático do parlamentar
+      description: >
+        Em que temas o parlamentar mais legisla e como vota em proposições de
+        cada tema, cruzando `autoriaProposicao` e `voto` com `temaProposicao`.
+
+
+        Três ressalvas que viajam no `metadata` e precisam chegar à interface:
+        uma proposição com vários temas conta em **cada** um, então a soma da
+        lista é maior que `totalProposicoes`; votos em votações sem proposição
+        (requerimentos, questões de ordem) e em proposições sem tema ficam de
+        fora e aparecem em `excluidos`; e `votosSim`/`votosNao` é o voto
+        registrado em votações **de proposições** do tema, não posição sobre o
+        tema — a votação pode ser sobre destaque, urgência ou texto principal, e
+        o objeto do voto não é distinguível no dado.
+      tags:
+        - Parlamentares
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 10
+          description: Temas retornados em cada bloco.
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PerfilTematico'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
   /parlamentares/{id}/comissoes:
     get:
       summary: Comissões do parlamentar
@@ -1689,6 +1735,78 @@ components:
           description: >
             `partidoAtual` indica que não havia histórico de filiação e o partido
             atual foi usado como aproximação.
+
+    PerfilTematico:
+      type: object
+      properties:
+        proposicoes:
+          type: object
+          properties:
+            temas:
+              type: array
+              description: Ordenado por número de proposições, decrescente.
+              items:
+                type: object
+                properties:
+                  tema:
+                    type: string
+                  total:
+                    type: integer
+            totalProposicoes:
+              type: integer
+              description: >
+                Total real de proposições de autoria. **Menor** que a soma da
+                lista por tema, porque uma proposição conta em cada tema seu.
+            semTema:
+              type: integer
+              description: Proposições de autoria sem tema registrado pelo ETL.
+        votacoes:
+          type: object
+          properties:
+            temas:
+              type: array
+              description: Ordenado por votos com posição de mérito (SIM + NÃO).
+              items:
+                type: object
+                properties:
+                  tema:
+                    type: string
+                  votosSim:
+                    type: integer
+                  votosNao:
+                    type: integer
+                  saldo:
+                    type: integer
+                    description: '`votosSim - votosNao`; negativo quando o NÃO prevalece.'
+                  abstencoes:
+                    type: integer
+                  obstrucoes:
+                    type: integer
+                  totalVotos:
+                    type: integer
+            totalVotos:
+              type: integer
+            excluidos:
+              type: object
+              properties:
+                votosSemProposicao:
+                  type: integer
+                  description: Requerimentos e questões de ordem — não classificam por tema.
+                votosEmProposicaoSemTema:
+                  type: integer
+        metadata:
+          type: object
+          properties:
+            limite:
+              type: integer
+            agrupamento:
+              type: string
+            observacao:
+              type: string
+            exclusoes:
+              type: array
+              items:
+                type: string
 
     Comissao:
       type: object

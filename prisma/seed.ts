@@ -200,7 +200,14 @@ async function main() {
       summary: 'Dispoe sobre incentivo a transparencia publica digital.',
       currentStatus: 'Em tramitacao',
       presentationDate: new Date('2024-02-01T10:00:00'),
-      temaProposicao: { create: [{ idTema: temaTransparencia.idTema }] },
+      // Dois temas de proposito: esta proposicao conta uma vez em CADA tema,
+      // entao a soma por tema fica maior que o total de proposicoes.
+      temaProposicao: {
+        create: [
+          { idTema: temaTransparencia.idTema },
+          { idTema: temaCidadania.idTema },
+        ],
+      },
     },
   });
 
@@ -338,6 +345,20 @@ async function main() {
     },
   });
 
+  // Requerimento: `idProposicao` nulo. O voto existe, mas nao classifica por
+  // tema — tem de aparecer em `excluidos`, nao sumir em silencio.
+  const votacaoRequerimento = await prisma.voting.create({
+    data: {
+      apiId: '3004',
+      casa: 'Camara',
+      idOrgao: plenarioCamara.idOrgao,
+      votingDate: new Date('2024-04-02T15:00:00'),
+      subjectSummary: 'Requerimento de urgencia.',
+      finalResult: 'Aprovado',
+      votingType: 'SIMBOLICA',
+    },
+  });
+
   await prisma.vote.createMany({
     data: [
       // Deputado estava no PSB em 15/03/2024 e a bancada orientou "Sim": seguiu.
@@ -348,6 +369,8 @@ async function main() {
       { idApi: 'v-3002-1001', parliamentarianId: deputado.id, votingId: votacaoPEC.id, choice: 'OBSTRUCAO' },
       { idApi: 'v-3002-1002', parliamentarianId: deputada.id, votingId: votacaoPEC.id, choice: 'NAO_REGISTRADO' },
       { idApi: 'v-3003-5001', parliamentarianId: senador.id, votingId: votacaoSenado.id, choice: 'SIM' },
+      { idApi: 'v-3004-1001', parliamentarianId: deputado.id, votingId: votacaoRequerimento.id, choice: 'SIM' },
+      { idApi: 'v-3004-1002', parliamentarianId: deputada.id, votingId: votacaoRequerimento.id, choice: 'NAO' },
     ],
   });
 

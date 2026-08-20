@@ -19,6 +19,7 @@ describe('ParliamentarianController', () => {
     getPresenceByParliamentarianId: jest.fn(),
     getAggregatedProfile: jest.fn(),
     listCommitteesByParliamentarianId: jest.fn(),
+    getThemeProfileByParliamentarianId: jest.fn(),
   };
 
   beforeEach(() => {
@@ -39,6 +40,10 @@ describe('ParliamentarianController', () => {
     router.get(
       '/parlamentares/:id/comissoes',
       controller.listCommitteesByParliamentarianId,
+    );
+    router.get(
+      '/parlamentares/:id/temas',
+      controller.getThemeProfileByParliamentarianId,
     );
     router.get('/parlamentares/:id', controller.getParliamentarianById);
 
@@ -681,6 +686,58 @@ describe('ParliamentarianController', () => {
       expect(serviceMock.listParliamentarians).toHaveBeenCalledWith(
         expect.objectContaining({ casa: 'senado', limite: 50 }),
       );
+    });
+  });
+
+  describe('GET /parlamentares/:id/temas', () => {
+    it('should return 200 with the thematic profile', async () => {
+      const payload = {
+        proposicoes: { temas: [{ tema: 'Saúde', total: 7 }], totalProposicoes: 8, semTema: 0 },
+        votacoes: { temas: [], totalVotos: 0, excluidos: {} },
+        metadata: {},
+      };
+      serviceMock.getThemeProfileByParliamentarianId.mockResolvedValue(payload);
+
+      const response = await request(app).get('/parlamentares/1/temas');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(payload);
+      expect(serviceMock.getThemeProfileByParliamentarianId).toHaveBeenCalledWith(
+        1,
+        undefined,
+      );
+    });
+
+    it('should forward limite when given', async () => {
+      serviceMock.getThemeProfileByParliamentarianId.mockResolvedValue({});
+
+      await request(app).get('/parlamentares/1/temas?limite=5');
+
+      expect(serviceMock.getThemeProfileByParliamentarianId).toHaveBeenCalledWith(1, 5);
+    });
+
+    it('should return 400 when id is invalid', async () => {
+      const response = await request(app).get('/parlamentares/abc/temas');
+
+      expect(response.status).toBe(400);
+      expect(serviceMock.getThemeProfileByParliamentarianId).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 when limite is invalid', async () => {
+      const response = await request(app).get('/parlamentares/1/temas?limite=0');
+
+      expect(response.status).toBe(400);
+      expect(serviceMock.getThemeProfileByParliamentarianId).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when parliamentarian is not found', async () => {
+      serviceMock.getThemeProfileByParliamentarianId.mockRejectedValue(
+        new NotFoundError('Parlamentar não encontrado.'),
+      );
+
+      const response = await request(app).get('/parlamentares/999/temas');
+
+      expect(response.status).toBe(404);
     });
   });
 });
