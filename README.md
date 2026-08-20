@@ -171,16 +171,17 @@ A documentação interativa está disponível via Swagger UI após iniciar o ser
 | Método | Rota | Descrição |
 |--------|------|-----------|
 | `GET` | `/votacoes` | Lista paginada de votações (`pagina`, `limite`) |
-| `GET` | `/votacoes/:id` | Detalhes de uma votação, com orientações de bancada e votos nominais |
-| `GET` | `/votacoes/:votingId/votos` | Votos de uma votação |
+| `GET` | `/votacoes/:id` | Detalhes com órgão, orientações de bancada e **placar agregado** |
+| `GET` | `/votacoes/:votingId/votos` | Lista nominal paginada, com filtro opcional por `voto` |
 
 #### Proposições
 
 | Método | Rota | Descrição |
 |--------|------|-----------|
-| `GET` | `/proposicoes` | Lista paginada, com filtros de `tipo`, `ano`, `casa`, `situacao`, `tema` e `busca` aplicados no banco |
+| `GET` | `/proposicoes` | Lista paginada, com filtros de `tipo`, `ano`, `casa`, `situacao`, `tema`, `busca` e `autor` aplicados no banco |
 | `GET` | `/proposicoes/filtros` | Valores existentes de cada filtro, com contagens, para montar os dropdowns |
-| `GET` | `/proposicoes/:id` | Detalhes, incluindo a jornada bicameral (`proposicaoRelacao`) |
+| `GET` | `/proposicoes/:id` | Detalhes: autores, `apiId` da fonte oficial, jornada bicameral e votações com placar |
+| `GET` | `/proposicoes/:id/tramitacoes` | Histórico de tramitação, com órgão e regime de cada etapa |
 
 > **`meta.total` reflete o filtro aplicado**, então a paginação é 100% do
 > servidor: o cliente não precisa varrer páginas para recortar em memória.
@@ -194,6 +195,21 @@ A documentação interativa está disponível via Swagger UI após iniciar o ser
 > carregado, o termo quase sempre casa numa página que o navegador não baixou.
 > Como as tabelas usam `utf8mb4_unicode_ci`, a comparação é insensível a caixa
 > e a acento (`saude` encontra `Saúde`).
+
+> **Placar em vez da lista inteira.** `GET /votacoes/:id` devolve `placar`
+> contado no banco (`groupBy`) e **não** embute a lista nominal: eram até 513
+> objetos por votação, o que obrigava o cliente a limitar quantas votações
+> conseguia detalhar. Quem precisa do voto de cada parlamentar usa
+> `/votacoes/:id/votos`, que é paginado e aceita `?voto=NAO`.
+>
+> **Tramitação sem `@relation`.** `tramitacao.idOrgao` e
+> `tramitacao.idTipoTramitacao` são colunas soltas no schema canônico, sem
+> FOREIGN KEY. Declarar a relação no Prisma faria o `npm run schema:check`
+> acusar divergência — o Prisma passaria a exigir duas chaves que o banco não
+> tem, e um `db push` divergiria de produção em silêncio. Por isso o órgão e o
+> regime são resolvidos em consulta separada, limitada aos ids da página. A
+> correção definitiva é adicionar FK e índice no agregador; o payload já é o
+> final.
 
 #### Dashboards
 

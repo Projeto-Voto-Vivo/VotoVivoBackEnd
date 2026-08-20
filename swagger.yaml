@@ -641,7 +641,10 @@ paths:
 
   /votacoes/{votingId}/votos:
     get:
-      summary: Votos de uma votação
+      summary: Votos nominais de uma votação
+      description: >
+        Lista paginada. Para o placar agregado, use `GET /votacoes/{id}` — não é
+        preciso baixar os votos para contar.
       tags:
         - Votações
       parameters:
@@ -650,17 +653,50 @@ paths:
           required: true
           schema:
             type: integer
+        - in: query
+          name: voto
+          schema:
+            type: string
+            enum:
+              - SIM
+              - NAO
+              - ABSTENCAO
+              - OBSTRUCAO
+              - AUSENCIA_JUSTIFICADA
+              - AUSENTE
+              - NAO_REGISTRADO
+          description: >
+            Filtra por uma posição. Aceita também a grafia com espaço
+            (`NAO REGISTRADO`), como está gravada no banco.
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
       responses:
         '200':
           description: Sucesso
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/VotoRegistrado'
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/VotoRegistrado'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
         '400':
           $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
         '429':
           $ref: '#/components/responses/LimiteExcedido'
         '500':
@@ -722,6 +758,14 @@ paths:
             encontra `Saúde`.
           example: transparência
         - in: query
+          name: autor
+          schema:
+            type: integer
+          description: >
+            Id interno do parlamentar autor, via `autoriaProposicao`. Cruza com
+            todos os demais filtros no banco — é o que permite ao painel do
+            perfil paginar no servidor em vez de recortar em memória.
+        - in: query
           name: pagina
           schema:
             type: integer
@@ -767,6 +811,9 @@ paths:
                         nullable: true
                       busca:
                         type: string
+                        nullable: true
+                      autor:
+                        type: integer
                         nullable: true
         '400':
           $ref: '#/components/responses/ParametroInvalido'
@@ -860,6 +907,61 @@ paths:
                         type: integer
                       observacao:
                         type: string
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /proposicoes/{id}/tramitacoes:
+    get:
+      summary: Histórico de tramitação da proposição
+      description: >
+        Etapas de `tramitacao`, ordenadas por `sequencia` e, como desempate, por
+        `dataHora`. Cada etapa traz o órgão e o regime de tramitação.
+
+
+        O órgão e o regime são resolvidos por consulta separada, e não por
+        `include`: `tramitacao.idOrgao` e `tramitacao.idTipoTramitacao` são
+        colunas soltas no schema canônico, sem FOREIGN KEY. O resultado é o
+        mesmo; a diferença é que declarar a relação no Prisma faria a API exigir
+        chaves que o banco não tem.
+      tags:
+        - Proposições
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EtapaTramitacao'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
         '429':
           $ref: '#/components/responses/LimiteExcedido'
         '500':
@@ -1808,6 +1910,97 @@ components:
               items:
                 type: string
 
+    OrgaoRef:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: integer
+        sigla:
+          type: string
+          nullable: true
+        nome:
+          type: string
+          nullable: true
+        tipoOrgao:
+          type: string
+          nullable: true
+        casa:
+          type: string
+          enum: [Camara, Senado, Congresso]
+
+    EtapaTramitacao:
+      type: object
+      properties:
+        id:
+          type: integer
+        sequencia:
+          type: integer
+          nullable: true
+        dataHora:
+          type: string
+          format: date-time
+          nullable: true
+        descricaoTramitacao:
+          type: string
+          nullable: true
+        descricaoSituacao:
+          type: string
+          nullable: true
+        despacho:
+          type: string
+          nullable: true
+        regime:
+          type: string
+          nullable: true
+          description: '`tipoTramitacao.regime` (ex.: Prioridade, Urgência).'
+        tipoTramitacao:
+          type: string
+          nullable: true
+        orgao:
+          $ref: '#/components/schemas/OrgaoRef'
+
+    Placar:
+      type: object
+      description: >
+        Contagem agregada no banco. As sete chaves estão sempre presentes,
+        zeradas quando não houve o voto — chave ausente obrigaria o cliente a
+        tratar `undefined` como zero. Os nomes são os do enum da API
+        (`AUSENCIA_JUSTIFICADA`, `NAO_REGISTRADO`), os mesmos do campo `voto`.
+      properties:
+        SIM:
+          type: integer
+        NAO:
+          type: integer
+        ABSTENCAO:
+          type: integer
+        OBSTRUCAO:
+          type: integer
+        AUSENCIA_JUSTIFICADA:
+          type: integer
+        AUSENTE:
+          type: integer
+        NAO_REGISTRADO:
+          type: integer
+
+    AutorParlamentar:
+      type: object
+      properties:
+        id:
+          type: integer
+        nomeParlamentar:
+          type: string
+        siglaPartido:
+          type: string
+        uf:
+          type: string
+        urlFoto:
+          type: string
+          format: uri
+        cargo:
+          type: string
+          nullable: true
+
     Comissao:
       type: object
       properties:
@@ -1836,6 +2029,8 @@ components:
           type: integer
         apiId:
           type: string
+        orgao:
+          $ref: '#/components/schemas/OrgaoRef'
         casa:
           type: string
           enum: [Camara, Senado, Congresso]
@@ -1874,6 +2069,8 @@ components:
       properties:
         id:
           type: integer
+        apiId:
+          type: string
         casa:
           type: string
         data:
@@ -1889,6 +2086,26 @@ components:
         tipo:
           type: string
           nullable: true
+        orgao:
+          $ref: '#/components/schemas/OrgaoRef'
+        proposicao:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            tipo:
+              type: string
+              nullable: true
+            numero:
+              type: string
+              nullable: true
+            ano:
+              type: integer
+              nullable: true
+            ementa:
+              type: string
+              nullable: true
         orientacoes:
           type: array
           description: Orientação de cada bancada. Só a Câmara possui este dado.
@@ -1900,31 +2117,35 @@ components:
               orientacao:
                 type: string
                 nullable: true
+        placar:
+          $ref: '#/components/schemas/Placar'
+        totalVotos:
+          type: integer
         votos:
-          type: array
-          items:
-            type: object
-            properties:
-              parlamentar:
-                type: string
-                nullable: true
-              voto:
-                type: string
-                enum:
-                  - SIM
-                  - NAO
-                  - ABSTENCAO
-                  - OBSTRUCAO
-                  - AUSENCIA_JUSTIFICADA
-                  - AUSENTE
-                  - NAO_REGISTRADO
+          type: object
+          description: >
+            Ponteiro para a lista nominal, que **não** vem embutida: eram até
+            513 objetos por votação. Use `placar` para o agregado.
+          properties:
+            rota:
+              type: string
+            observacao:
+              type: string
 
     VotoRegistrado:
       type: object
       properties:
         id:
           type: integer
+        parlamentarId:
+          type: integer
         parlamentar:
+          type: string
+          nullable: true
+        siglaPartido:
+          type: string
+          nullable: true
+        uf:
           type: string
           nullable: true
         voto:
@@ -1943,6 +2164,27 @@ components:
         - $ref: '#/components/schemas/ProposicaoPerfil'
         - type: object
           properties:
+            apiId:
+              type: string
+              description: >
+                Id na API de origem — é com ele que o cliente monta o link para
+                a ficha oficial da Câmara ou do Senado.
+            autores:
+              type: array
+              items:
+                $ref: '#/components/schemas/AutorParlamentar'
+            autoria:
+              type: object
+              description: >
+                `autoriaProposicao` só liga proposição a parlamentar. Projeto do
+                Executivo, do Judiciário, de comissão ou de iniciativa popular
+                fica com `autores` vazio — o que significa "sem autor
+                parlamentar", não "sem autor".
+              properties:
+                somenteParlamentares:
+                  type: boolean
+                observacao:
+                  type: string
             jornada:
               type: object
               description: >
@@ -1967,8 +2209,18 @@ components:
                     $ref: '#/components/schemas/ProposicaoReferencia'
             votacoes:
               type: array
+              description: Cada votação já vem com órgão e placar agregado.
               items:
-                $ref: '#/components/schemas/VotacaoResumo'
+                allOf:
+                  - $ref: '#/components/schemas/VotacaoResumo'
+                  - type: object
+                    properties:
+                      orgao:
+                        $ref: '#/components/schemas/OrgaoRef'
+                      placar:
+                        $ref: '#/components/schemas/Placar'
+                      totalVotos:
+                        type: integer
 
     ProposicaoReferencia:
       type: object

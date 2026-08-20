@@ -1,6 +1,7 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient, VoteChoice } from '@prisma/client';
 import { NotFoundError } from '../errors/http-errors';
 import { casaLegislativa } from '../lib/casas';
+import { montarPlacar, Placar, totalDoPlacar } from '../domain/placar';
 import { buildMeta, Pagination, TAMANHO_PAGINA_PADRAO } from '../lib/request-params';
 
 type PropositionRef = {
@@ -27,6 +28,8 @@ export type PropositionFilters = {
   tema?: string;
   /** Busca textual em ementa e número da proposição. */
   busca?: string;
+  /** Id interno do parlamentar autor (via `autoriaProposicao`). */
+  autor?: number;
 };
 
 /** Teto de situações distintas devolvidas em `/proposicoes/filtros`. */
@@ -78,6 +81,7 @@ export class PropositionService {
         situacao: filters.situacao ?? null,
         tema: filters.tema ?? null,
         busca: filters.busca ?? null,
+        autor: filters.autor ?? null,
       },
     };
   }
@@ -165,7 +169,8 @@ export class PropositionService {
       include: {
         propositionType: true,
         temaProposicao: { include: { tema: true } },
-        votings: true,
+        votings: { include: { orgao: true } },
+        authors: { include: { parliamentarian: true } },
         relations: {
           include: { related: { include: { propositionType: true } } },
         },
@@ -176,6 +181,12 @@ export class PropositionService {
       throw new NotFoundError('Proposição não encontrada.');
     }
 
+    // Um unico groupBy para todas as votacoes da proposicao, em vez de uma
+    // consulta por votacao.
+    const placares = await this.placaresPorVotacao(
+      proposition.votings.map((voting) => voting.id),
+    );
+
     const relacionadas = proposition.relations;
     const porTipo = (tipo: string) =>
       relacionadas
@@ -184,6 +195,9 @@ export class PropositionService {
 
     return {
       id: proposition.id,
+      // Id na API de origem: e com ele que o cliente monta o link para a ficha
+      // oficial da Camara ou do Senado.
+      apiId: proposition.apiId,
       casa: proposition.house,
       sigla: proposition.propositionType?.sigla ?? null,
       numero: proposition.number,
@@ -192,6 +206,22 @@ export class PropositionService {
       situacao: proposition.currentStatus,
       dataApresentacao: toIsoDate(proposition.presentationDate),
       temas: proposition.temaProposicao.map((link) => link.tema.descricao),
+      // So autoria parlamentar: autoriaProposicao nao modela autor externo
+      // (Executivo, Judiciario, comissao, iniciativa popular), entao uma lista
+      // vazia aqui NAO significa "sem autor" — ver o bloco `autoria`.
+      autores: proposition.authors.map((autoria) => ({
+        id: autoria.parliamentarian.id,
+        nomeParlamentar: autoria.parliamentarian.ballotName ?? '',
+        siglaPartido: autoria.parliamentarian.currentParty ?? '',
+        uf: autoria.parliamentarian.state ?? '',
+        urlFoto: autoria.parliamentarian.photoUrl ?? '',
+        cargo: autoria.parliamentarian.role,
+      })),
+      autoria: {
+        somenteParlamentares: true,
+        observacao:
+          'O banco so registra autoria parlamentar. Proposicoes do Executivo, do Judiciario, de comissao ou de iniciativa popular ficam com autores vazio — ausencia de autor parlamentar, nao ausencia de autor.',
+      },
       // Jornada bicameral: a mesma materia costuma existir nas duas casas com
       // ids diferentes; sem `proposicaoRelacao` elas apareciam desconexas.
       jornada: {
@@ -200,15 +230,136 @@ export class PropositionService {
         anteriores: porTipo('ANTERIOR'),
         posteriores: porTipo('POSTERIOR'),
       },
-      votacoes: proposition.votings.map((voting) => ({
-        id: voting.id,
-        casa: voting.casa,
-        data: voting.votingDate,
-        resumo: voting.subjectSummary,
-        resultado: voting.finalResult,
-        tipo: voting.votingType,
-      })),
+      votacoes: proposition.votings.map((voting) => {
+        const placar = placares.get(voting.id) ?? montarPlacar([]);
+
+        return {
+          id: voting.id,
+          casa: voting.casa,
+          data: voting.votingDate,
+          resumo: voting.subjectSummary,
+          resultado: voting.finalResult,
+          tipo: voting.votingType,
+          // Saber que a votacao foi na CCJC e nao no Plenario muda a leitura
+          // do placar.
+          orgao: referenciaOrgao(voting.orgao),
+          placar,
+          totalVotos: totalDoPlacar(placar),
+        };
+      }),
     };
+  }
+
+  /**
+   * Historico de tramitacao.
+   *
+   * O orgao e o regime sao resolvidos por consulta separada, e nao por
+   * `include`: `tramitacao.idOrgao` e `tramitacao.idTipoTramitacao` sao colunas
+   * soltas no schema canonico — sem FOREIGN KEY. Declarar `@relation` no Prisma
+   * faria o `npm run schema:check` acusar divergencia (o Prisma passaria a
+   * exigir duas FKs que o banco nao tem) e um `db push` divergiria de producao
+   * em silencio. A correcao de verdade e adicionar FK e indice no agregador;
+   * ate la, o join acontece aqui, com o mesmo resultado e sem desvio de schema.
+   */
+  async listTramitacoes(
+    propositionId: number,
+    pagination: Pagination = { page: 1, limit: TAMANHO_PAGINA_PADRAO },
+  ) {
+    await this.ensurePropositionExists(propositionId);
+
+    const { page, limit } = pagination;
+    const where = { idProposicao: propositionId };
+
+    const [etapas, total] = await Promise.all([
+      this.prisma.tramitacao.findMany({
+        where,
+        // `sequencia` e a ordem oficial; `dataHora` desempata e cobre as linhas
+        // sem sequencia.
+        orderBy: [{ sequencia: 'asc' }, { dataHora: 'asc' }],
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      this.prisma.tramitacao.count({ where }),
+    ]);
+
+    const orgaoIds = unicos(etapas.map((etapa) => etapa.idOrgao));
+    const tipoIds = unicos(etapas.map((etapa) => etapa.idTipoTramitacao));
+
+    const [orgaos, tipos] = await Promise.all([
+      orgaoIds.length
+        ? this.prisma.orgao.findMany({ where: { idOrgao: { in: orgaoIds } } })
+        : Promise.resolve([]),
+      tipoIds.length
+        ? this.prisma.tipoTramitacao.findMany({
+            where: { idTipoTramitacao: { in: tipoIds } },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const porOrgao = new Map(orgaos.map((orgao) => [orgao.idOrgao, orgao]));
+    const porTipo = new Map(tipos.map((tipo) => [tipo.idTipoTramitacao, tipo]));
+
+    return {
+      data: etapas.map((etapa) => {
+        const tipo =
+          etapa.idTipoTramitacao === null
+            ? undefined
+            : porTipo.get(etapa.idTipoTramitacao);
+
+        return {
+          id: etapa.idTramitacao,
+          sequencia: etapa.sequencia,
+          dataHora: etapa.dataHora,
+          descricaoTramitacao: etapa.descricaoTramitacao,
+          descricaoSituacao: etapa.descricaoSituacao,
+          despacho: etapa.despacho,
+          regime: tipo?.regime ?? null,
+          tipoTramitacao: tipo?.descricao ?? null,
+          orgao: referenciaOrgao(
+            etapa.idOrgao === null ? null : porOrgao.get(etapa.idOrgao) ?? null,
+          ),
+        };
+      }),
+      meta: buildMeta(total, page, limit),
+    };
+  }
+
+  private async placaresPorVotacao(votingIds: number[]): Promise<Map<number, Placar>> {
+    if (votingIds.length === 0) {
+      return new Map();
+    }
+
+    const linhas = await this.prisma.vote.groupBy({
+      by: ['votingId', 'choice'],
+      where: { votingId: { in: votingIds } },
+      _count: { _all: true },
+    });
+
+    const porVotacao = new Map<
+      number,
+      { choice: VoteChoice; _count: { _all: number } }[]
+    >();
+
+    for (const linha of linhas) {
+      const atual = porVotacao.get(linha.votingId) ?? [];
+      atual.push({ choice: linha.choice, _count: { _all: linha._count._all } });
+      porVotacao.set(linha.votingId, atual);
+    }
+
+    return new Map(
+      votingIds.map((id) => [id, montarPlacar(porVotacao.get(id) ?? [])]),
+    );
+  }
+
+  private async ensurePropositionExists(id: number) {
+    const proposition = await this.prisma.proposition.findUnique({
+      where: { id },
+      select: { id: true },
+    });
+
+    if (!proposition) {
+      throw new NotFoundError('Proposição não encontrada.');
+    }
   }
 
   private buildWhere(filters: PropositionFilters): Prisma.PropositionWhereInput {
@@ -253,6 +404,13 @@ export class PropositionService {
       ];
     }
 
+    // Cruza autoria com os demais filtros no banco. Sem isto o cliente
+    // precisava paginar as proposições do parlamentar e recortar em memória,
+    // truncando o painel do perfil.
+    if (filters.autor !== undefined) {
+      where.authors = { some: { parliamentarianId: filters.autor } };
+    }
+
     return where;
   }
 }
@@ -265,6 +423,35 @@ function referenciaProposicao(proposition: PropositionRef) {
     numero: proposition.number,
     ano: proposition.year,
   };
+}
+
+function referenciaOrgao(
+  orgao:
+    | {
+        idOrgao: number;
+        sigla: string | null;
+        nome: string | null;
+        tipoOrgao: string | null;
+        casa: string;
+      }
+    | null
+    | undefined,
+) {
+  if (!orgao) {
+    return null;
+  }
+
+  return {
+    id: orgao.idOrgao,
+    sigla: orgao.sigla,
+    nome: orgao.nome,
+    tipoOrgao: orgao.tipoOrgao,
+    casa: orgao.casa,
+  };
+}
+
+function unicos(valores: (number | null)[]): number[] {
+  return [...new Set(valores.filter((valor): valor is number => valor !== null))];
 }
 
 function toIsoDate(date: Date | null): string | null {

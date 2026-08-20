@@ -10,6 +10,7 @@ describe('PropositionController', () => {
   const serviceMock = {
     listPropositions: jest.fn(),
     listFilterOptions: jest.fn(),
+    listTramitacoes: jest.fn(),
     getPropositionById: jest.fn(),
   };
 
@@ -21,6 +22,7 @@ describe('PropositionController', () => {
 
     router.get('/proposicoes', controller.listPropositions);
     router.get('/proposicoes/filtros', controller.listFilterOptions);
+    router.get('/proposicoes/:id/tramitacoes', controller.listTramitacoes);
     router.get('/proposicoes/:id', controller.getPropositionById);
 
     app = express();
@@ -49,6 +51,7 @@ describe('PropositionController', () => {
           situacao: undefined,
           tema: undefined,
           busca: undefined,
+          autor: undefined,
         },
       );
     });
@@ -175,6 +178,7 @@ describe('PropositionController', () => {
           situacao: undefined,
           tema: undefined,
           busca: undefined,
+          autor: undefined,
         },
       );
     });
@@ -221,6 +225,69 @@ describe('PropositionController', () => {
 
       expect(response.status).toBe(200);
       expect(serviceMock.getPropositionById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /proposicoes com filtro de autor', () => {
+    beforeEach(() => {
+      serviceMock.listPropositions.mockResolvedValue({ data: [], meta: {} });
+    });
+
+    /**
+     * Sem cruzar autor com os demais filtros, o painel do perfil precisava
+     * paginar tudo do parlamentar e recortar em memoria.
+     */
+    it('should forward autor combined with the other filters', async () => {
+      await request(app).get('/proposicoes?autor=7&tipo=PL&ano=2024');
+
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith(
+        { page: 1, limit: 20 },
+        expect.objectContaining({ autor: 7, tipo: 'PL', ano: 2024 }),
+      );
+    });
+
+    it('should return 400 for a non-numeric autor', async () => {
+      const response = await request(app).get('/proposicoes?autor=abc');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'Parâmetro inválido: autor.' });
+      expect(serviceMock.listPropositions).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /proposicoes/:id/tramitacoes', () => {
+    it('should return 200 with the paginated history', async () => {
+      const payload = {
+        data: [{ id: 1, sequencia: 1, descricaoTramitacao: 'Apresentação' }],
+        meta: { total: 1, page: 1, lastPage: 1, limit: 20 },
+      };
+      serviceMock.listTramitacoes.mockResolvedValue(payload);
+
+      const response = await request(app).get('/proposicoes/1/tramitacoes');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(payload);
+      expect(serviceMock.listTramitacoes).toHaveBeenCalledWith(1, {
+        page: 1,
+        limit: 20,
+      });
+    });
+
+    it('should return 400 for a non-numeric id', async () => {
+      const response = await request(app).get('/proposicoes/abc/tramitacoes');
+
+      expect(response.status).toBe(400);
+      expect(serviceMock.listTramitacoes).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when the proposition does not exist', async () => {
+      serviceMock.listTramitacoes.mockRejectedValue(
+        new NotFoundError('Proposição não encontrada.'),
+      );
+
+      const response = await request(app).get('/proposicoes/999/tramitacoes');
+
+      expect(response.status).toBe(404);
     });
   });
 });

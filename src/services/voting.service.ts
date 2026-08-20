@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { NotFoundError } from '../errors/http-errors';
+import { montarPlacar, totalDoPlacar } from '../domain/placar';
 import { buildMeta, Pagination, TAMANHO_PAGINA_PADRAO } from '../lib/request-params';
 
 export class VotingService {
@@ -12,6 +13,7 @@ export class VotingService {
       this.prisma.voting.findMany({
         include: {
           proposition: { include: { propositionType: true } },
+          orgao: true,
         },
         orderBy: {
           votingDate: 'desc',
@@ -31,6 +33,15 @@ export class VotingService {
         resumo: v.subjectSummary,
         resultado: v.finalResult,
         tipo: v.votingType,
+        orgao: v.orgao
+          ? {
+              id: v.orgao.idOrgao,
+              sigla: v.orgao.sigla,
+              nome: v.orgao.nome,
+              tipoOrgao: v.orgao.tipoOrgao,
+              casa: v.orgao.casa,
+            }
+          : null,
         proposicao: v.proposition
           ? {
               id: v.proposition.id,
@@ -44,17 +55,22 @@ export class VotingService {
     };
   }
 
+  /**
+   * Detalhe da votação com o placar agregado.
+   *
+   * O payload NÃO traz a lista nominal de votos: eram até 513 objetos por
+   * votação, o que obrigava o cliente a limitar quantas votações detalhava. O
+   * `placar` é contado no banco (`groupBy`) e cobre o caso de uso comum; quem
+   * precisa do voto de cada parlamentar usa `GET /votacoes/:id/votos`, que é
+   * paginado.
+   */
   async getVotingById(id: number) {
     const voting = await this.prisma.voting.findUnique({
       where: { id },
       include: {
-        proposition: true,
+        proposition: { include: { propositionType: true } },
+        orgao: true,
         orientations: true,
-        votes: {
-          include: {
-            parliamentarian: true,
-          },
-        },
       },
     });
 
@@ -62,21 +78,52 @@ export class VotingService {
       throw new NotFoundError('Votação não encontrada.');
     }
 
+    const contagem = await this.prisma.vote.groupBy({
+      by: ['choice'],
+      where: { votingId: id },
+      _count: { _all: true },
+    });
+
+    const placar = montarPlacar(contagem);
+
     return {
       id: voting.id,
+      apiId: voting.apiId,
       casa: voting.casa,
       data: voting.votingDate,
       resumo: voting.subjectSummary,
       resultado: voting.finalResult,
       tipo: voting.votingType,
+      // Votação em comissão e votação em plenário não se leem do mesmo jeito.
+      orgao: voting.orgao
+        ? {
+            id: voting.orgao.idOrgao,
+            sigla: voting.orgao.sigla,
+            nome: voting.orgao.nome,
+            tipoOrgao: voting.orgao.tipoOrgao,
+            casa: voting.orgao.casa,
+          }
+        : null,
+      proposicao: voting.proposition
+        ? {
+            id: voting.proposition.id,
+            tipo: voting.proposition.propositionType?.sigla ?? null,
+            numero: voting.proposition.number,
+            ano: voting.proposition.year,
+            ementa: voting.proposition.summary,
+          }
+        : null,
       orientacoes: voting.orientations.map((o) => ({
         bancada: o.bench,
         orientacao: o.orientation,
       })),
-      votos: voting.votes.map((v) => ({
-        parlamentar: v.parliamentarian?.ballotName,
-        voto: v.choice,
-      })),
+      placar,
+      totalVotos: totalDoPlacar(placar),
+      votos: {
+        rota: `/votacoes/${voting.id}/votos`,
+        observacao:
+          'A lista nominal é paginada em rota própria: incluí-la aqui significava até 513 objetos por votação.',
+      },
     };
   }
 }

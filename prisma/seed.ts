@@ -24,6 +24,8 @@ async function main() {
   await prisma.presence.deleteMany();
   await prisma.voting.deleteMany();
   await prisma.event.deleteMany();
+  await prisma.tramitacao.deleteMany();
+  await prisma.tipoTramitacao.deleteMany();
   await prisma.propositionAuthor.deleteMany();
   await prisma.propositionRelation.deleteMany();
   await prisma.temaProposicao.deleteMany();
@@ -255,6 +257,65 @@ async function main() {
     ],
   });
 
+  // --- Tramitacao -----------------------------------------------------------
+  const regimePrioridade = await prisma.tipoTramitacao.create({
+    data: { idApi: '100', descricao: 'Recebimento pela Comissao', regime: 'Prioridade' },
+  });
+  const regimeUrgencia = await prisma.tipoTramitacao.create({
+    data: { idApi: '200', descricao: 'Aprovacao de requerimento de urgencia', regime: 'Urgencia' },
+  });
+
+  await prisma.tramitacao.createMany({
+    data: [
+      {
+        idApi: 'tr-2001',
+        idProposicao: plCamara.id,
+        sequencia: 1,
+        dataHora: new Date('2024-02-01T10:00:00'),
+        descricaoTramitacao: 'Apresentacao do Projeto de Lei',
+        descricaoSituacao: 'Aguardando despacho do Presidente',
+        despacho: 'As Comissoes de Constituicao e Justica e de Cidadania.',
+        idOrgao: plenarioCamara.idOrgao,
+        idTipoTramitacao: regimePrioridade.idTipoTramitacao,
+      },
+      {
+        idApi: 'tr-2001',
+        idProposicao: plCamara.id,
+        sequencia: 2,
+        dataHora: new Date('2024-02-20T14:30:00'),
+        descricaoTramitacao: 'Recebimento pela CCJC',
+        descricaoSituacao: 'Aguardando designacao de relator',
+        despacho: null,
+        idOrgao: comissaoCCJ.idOrgao,
+        idTipoTramitacao: regimePrioridade.idTipoTramitacao,
+      },
+      {
+        idApi: 'tr-2001',
+        idProposicao: plCamara.id,
+        sequencia: 3,
+        dataHora: new Date('2024-03-14T09:00:00'),
+        descricaoTramitacao: 'Aprovado requerimento de urgencia',
+        descricaoSituacao: 'Pronta para a Ordem do Dia',
+        despacho: null,
+        // Sem orgao e sem tipo de proposito: o ETL nem sempre resolve os dois,
+        // e a etapa tem de aparecer assim mesmo, com os campos nulos.
+        idOrgao: null,
+        idTipoTramitacao: null,
+      },
+      {
+        idApi: 'tr-2002',
+        idProposicao: pecCamara.id,
+        sequencia: 1,
+        dataHora: new Date('2024-02-14T15:30:00'),
+        descricaoTramitacao: 'Apresentacao da Proposta de Emenda a Constituicao',
+        descricaoSituacao: 'Aguardando parecer',
+        despacho: null,
+        idOrgao: plenarioCamara.idOrgao,
+        idTipoTramitacao: regimeUrgencia.idTipoTramitacao,
+      },
+    ],
+  });
+
   // --- Eventos --------------------------------------------------------------
   const sessaoDeliberativaCamara = await prisma.event.create({
     data: { apiId: 'ev-1', house: 'Camara', idOrgao: plenarioCamara.idOrgao, dataHoraInicio: new Date('2024-03-15T14:00:00'), descricaoTipo: 'Sessao Deliberativa' },
@@ -443,6 +504,7 @@ async function main() {
   });
 
   console.log('Seed executada com sucesso.');
+  console.log(`  tramitacoes:   4 (3 na proposicao ${plCamara.id}, uma delas sem orgao/regime)`);
   console.log(`  parlamentares: ${deputado.id}, ${deputada.id}, ${senador.id} (senador empossado em 2025)`);
   console.log(`  proposicoes:   ${plCamara.id} (Camara), ${plSenado.id} (Senado, mesma materia)`);
   console.log(`  votacoes:      ${votacaoPL.id}, ${votacaoPEC.id} (com OBSTRUCAO e NAO REGISTRADO), ${votacaoSenado.id}`);

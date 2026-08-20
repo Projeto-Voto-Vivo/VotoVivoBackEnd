@@ -24,6 +24,10 @@ export class PropositionController {
           situacao: getOptionalString(query.situacao),
           tema: getOptionalString(query.tema),
           busca: getOptionalString(query.busca),
+          autor:
+            query.autor === undefined || query.autor === ''
+              ? undefined
+              : parsePositiveInt(query.autor, 'autor'),
         },
       );
 
@@ -36,6 +40,20 @@ export class PropositionController {
   listFilterOptions = async (_req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await this.propositionService.listFilterOptions();
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  listTramitacoes = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const id = parsePositiveInt(req.params.id, 'id');
+      const result = await this.propositionService.listTramitacoes(
+        id,
+        parsePagination(req.query as Record<string, unknown>),
+      );
 
       res.status(200).json(result);
     } catch (error) {

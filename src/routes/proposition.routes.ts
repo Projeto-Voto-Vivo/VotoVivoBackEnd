@@ -14,6 +14,11 @@ propositionRouter.get('/proposicoes', propositionController.listPropositions);
 // "filtros" e responderia 400.
 propositionRouter.get('/proposicoes/filtros', propositionController.listFilterOptions);
 
+propositionRouter.get(
+  '/proposicoes/:id/tramitacoes',
+  propositionController.listTramitacoes,
+);
+
 propositionRouter.get('/proposicoes/:id', propositionController.getPropositionById);
 
 export { propositionRouter };

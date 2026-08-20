@@ -13,6 +13,19 @@ describe('PropositionService', () => {
         count: jest.fn(),
         groupBy: jest.fn(),
       },
+      tramitacao: {
+        findMany: jest.fn().mockResolvedValue([]),
+        count: jest.fn().mockResolvedValue(0),
+      },
+      orgao: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      tipoTramitacao: {
+        findMany: jest.fn().mockResolvedValue([]),
+      },
+      vote: {
+        groupBy: jest.fn().mockResolvedValue([]),
+      },
       propositionType: {
         findMany: jest.fn(),
       },
@@ -197,6 +210,7 @@ describe('PropositionService', () => {
         situacao: null,
         tema: null,
         busca: null,
+        autor: null,
       });
     });
 
@@ -279,8 +293,10 @@ describe('PropositionService', () => {
         summary: 'Ementa',
         currentStatus: 'Em tramitação',
         presentationDate: new Date('2024-02-01T10:00:00Z'),
+        apiId: '2001',
         temaProposicao: [],
         votings: [],
+        authors: [],
         relations: [
           {
             relationType: 'MESMA_MATERIA',
@@ -309,6 +325,254 @@ describe('PropositionService', () => {
       await expect(service.getPropositionById(999)).rejects.toBeInstanceOf(
         NotFoundError,
       );
+    });
+  });
+
+  describe('getPropositionById — autoria, apiId e placar', () => {
+    const detalhe = (overrides = {}) => ({
+      id: 1,
+      apiId: '2001',
+      house: 'Camara',
+      propositionType: { sigla: 'PL' },
+      number: '123',
+      year: 2024,
+      summary: 'Ementa',
+      currentStatus: 'Em tramitação',
+      presentationDate: null,
+      temaProposicao: [],
+      votings: [],
+      authors: [],
+      relations: [],
+      ...overrides,
+    });
+
+    /** Sem `apiId` o cliente nao consegue montar o link para a ficha oficial. */
+    it('should expose the source apiId', async () => {
+      prismaMock.proposition.findUnique.mockResolvedValue(detalhe());
+
+      const result = await service.getPropositionById(1);
+
+      expect(result.apiId).toBe('2001');
+    });
+
+    it('should expose parliamentary authors', async () => {
+      prismaMock.proposition.findUnique.mockResolvedValue(
+        detalhe({
+          authors: [
+            {
+              parliamentarian: {
+                id: 7,
+                ballotName: 'João da Silva',
+                currentParty: 'PT',
+                state: 'SP',
+                photoUrl: 'https://example.com/joao.jpg',
+                role: 'Deputado(a)',
+              },
+            },
+          ],
+        }),
+      );
+
+      const result = await service.getPropositionById(1);
+
+      expect(result.autores).toEqual([
+        {
+          id: 7,
+          nomeParlamentar: 'João da Silva',
+          siglaPartido: 'PT',
+          uf: 'SP',
+          urlFoto: 'https://example.com/joao.jpg',
+          cargo: 'Deputado(a)',
+        },
+      ]);
+    });
+
+    /**
+     * `autoriaProposicao` so liga proposicao a parlamentar: projeto do
+     * Executivo fica sem autor nenhum. A lista vazia precisa vir acompanhada da
+     * ressalva, senao a UI mostra "sem autor" para um projeto que tem autor.
+     */
+    it('should flag that only parliamentary authorship is modelled', async () => {
+      prismaMock.proposition.findUnique.mockResolvedValue(detalhe());
+
+      const result = await service.getPropositionById(1);
+
+      expect(result.autores).toEqual([]);
+      expect(result.autoria.somenteParlamentares).toBe(true);
+      expect(result.autoria.observacao).toMatch(/Executivo/);
+    });
+
+    /**
+     * Um unico groupBy para todas as votacoes, em vez de uma consulta por
+     * votacao.
+     */
+    it('should attach an aggregated tally and orgao to each voting', async () => {
+      prismaMock.proposition.findUnique.mockResolvedValue(
+        detalhe({
+          votings: [
+            {
+              id: 5,
+              casa: 'Camara',
+              votingDate: null,
+              subjectSummary: null,
+              finalResult: 'Aprovado',
+              votingType: 'NOMINAL',
+              orgao: {
+                idOrgao: 4,
+                sigla: 'CCJC',
+                nome: 'Comissão de Constituição e Justiça',
+                tipoOrgao: 'Comissão Permanente',
+                casa: 'Camara',
+              },
+            },
+          ],
+        }),
+      );
+      prismaMock.vote.groupBy.mockResolvedValue([
+        { votingId: 5, choice: 'SIM', _count: { _all: 300 } },
+        { votingId: 5, choice: 'NAO', _count: { _all: 100 } },
+      ]);
+
+      const result = await service.getPropositionById(1);
+
+      expect(prismaMock.vote.groupBy).toHaveBeenCalledTimes(1);
+      expect(result.votacoes[0].placar.SIM).toBe(300);
+      expect(result.votacoes[0].placar.ABSTENCAO).toBe(0);
+      expect(result.votacoes[0].totalVotos).toBe(400);
+      expect(result.votacoes[0].orgao?.sigla).toBe('CCJC');
+    });
+
+    it('should not query votes when there is no voting', async () => {
+      prismaMock.proposition.findUnique.mockResolvedValue(detalhe());
+
+      await service.getPropositionById(1);
+
+      expect(prismaMock.vote.groupBy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listTramitacoes', () => {
+    beforeEach(() => {
+      prismaMock.proposition.findUnique.mockResolvedValue({ id: 1 });
+    });
+
+    const etapa = (overrides = {}) => ({
+      idTramitacao: 10,
+      sequencia: 1,
+      dataHora: new Date('2024-02-01T10:00:00Z'),
+      descricaoTramitacao: 'Apresentação',
+      descricaoSituacao: 'Aguardando despacho',
+      despacho: 'Às comissões',
+      idOrgao: 4,
+      idTipoTramitacao: 2,
+      ...overrides,
+    });
+
+    it('should order by sequencia and fall back to dataHora', async () => {
+      await service.listTramitacoes(1);
+
+      expect(prismaMock.tramitacao.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ sequencia: 'asc' }, { dataHora: 'asc' }],
+          skip: 0,
+          take: 20,
+        }),
+      );
+    });
+
+    /**
+     * `tramitacao.idOrgao` e `idTipoTramitacao` sao colunas soltas, sem FK no
+     * schema canonico — declarar @relation faria o schema:check acusar
+     * divergencia. O join acontece aqui, em consultas separadas e limitadas aos
+     * ids da pagina.
+     */
+    it('should stitch orgao and regime without a Prisma relation', async () => {
+      prismaMock.tramitacao.findMany.mockResolvedValue([etapa()]);
+      prismaMock.tramitacao.count.mockResolvedValue(1);
+      prismaMock.orgao.findMany.mockResolvedValue([
+        {
+          idOrgao: 4,
+          sigla: 'CCTCI',
+          nome: 'Comissão de Comunicação',
+          tipoOrgao: 'Comissão Permanente',
+          casa: 'Camara',
+        },
+      ]);
+      prismaMock.tipoTramitacao.findMany.mockResolvedValue([
+        { idTipoTramitacao: 2, descricao: 'Recebimento', regime: 'Prioridade' },
+      ]);
+
+      const result = await service.listTramitacoes(1);
+
+      expect(prismaMock.orgao.findMany).toHaveBeenCalledWith({
+        where: { idOrgao: { in: [4] } },
+      });
+      expect(result.data[0]).toEqual({
+        id: 10,
+        sequencia: 1,
+        dataHora: new Date('2024-02-01T10:00:00Z'),
+        descricaoTramitacao: 'Apresentação',
+        descricaoSituacao: 'Aguardando despacho',
+        despacho: 'Às comissões',
+        regime: 'Prioridade',
+        tipoTramitacao: 'Recebimento',
+        orgao: {
+          id: 4,
+          sigla: 'CCTCI',
+          nome: 'Comissão de Comunicação',
+          tipoOrgao: 'Comissão Permanente',
+          casa: 'Camara',
+        },
+      });
+    });
+
+    it('should return null orgao and regime when the columns are null', async () => {
+      prismaMock.tramitacao.findMany.mockResolvedValue([
+        etapa({ idOrgao: null, idTipoTramitacao: null }),
+      ]);
+      prismaMock.tramitacao.count.mockResolvedValue(1);
+
+      const result = await service.listTramitacoes(1);
+
+      expect(result.data[0].orgao).toBeNull();
+      expect(result.data[0].regime).toBeNull();
+      // Nada a resolver: nao vale gastar consulta.
+      expect(prismaMock.orgao.findMany).not.toHaveBeenCalled();
+      expect(prismaMock.tipoTramitacao.findMany).not.toHaveBeenCalled();
+    });
+
+    it('should deduplicate the ids it resolves', async () => {
+      prismaMock.tramitacao.findMany.mockResolvedValue([
+        etapa({ idTramitacao: 10 }),
+        etapa({ idTramitacao: 11 }),
+      ]);
+      prismaMock.tramitacao.count.mockResolvedValue(2);
+
+      await service.listTramitacoes(1);
+
+      expect(prismaMock.orgao.findMany).toHaveBeenCalledWith({
+        where: { idOrgao: { in: [4] } },
+      });
+    });
+
+    it('should paginate', async () => {
+      prismaMock.tramitacao.count.mockResolvedValue(45);
+
+      const result = await service.listTramitacoes(1, { page: 2, limit: 20 });
+
+      expect(prismaMock.tramitacao.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ skip: 20, take: 20 }),
+      );
+      expect(result.meta).toEqual({ total: 45, page: 2, lastPage: 3, limit: 20 });
+    });
+
+    it('should throw NotFoundError when the proposition does not exist', async () => {
+      prismaMock.proposition.findUnique.mockResolvedValue(null);
+
+      await expect(service.listTramitacoes(999)).rejects.toBeInstanceOf(
+        NotFoundError,
+      );
+      expect(prismaMock.tramitacao.findMany).not.toHaveBeenCalled();
     });
   });
 });
