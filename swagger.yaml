@@ -478,6 +478,46 @@ paths:
         '500':
           $ref: '#/components/responses/ErroInterno'
 
+  /parlamentares/{id}/alinhamento:
+    get:
+      summary: Fidelidade partidária do parlamentar
+      description: >
+        Percentagem de votos que seguiram a orientação da bancada, comparando
+        `orientacaoVotacao` com o voto registrado e usando o partido vigente na
+        DATA de cada votação.
+
+
+        Existe como rota própria porque a taxa só vivia dentro de
+        `/parlamentares/{id}/perfil`, que dispara todas as consultas do
+        parlamentar — o cliente pagava um perfil inteiro para preencher um card.
+
+
+        Leia `motivo` antes de exibir: `taxa` é `null` sempre que a comparação
+        não sustenta uma percentagem, e nunca deve ser substituída por `0`.
+      tags:
+        - Parlamentares
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Alinhamento'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
   /parlamentares/{id}/temas:
     get:
       summary: Perfil temático do parlamentar

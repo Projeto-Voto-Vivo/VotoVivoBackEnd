@@ -20,6 +20,7 @@ describe('ParliamentarianController', () => {
     getAggregatedProfile: jest.fn(),
     listCommitteesByParliamentarianId: jest.fn(),
     getThemeProfileByParliamentarianId: jest.fn(),
+    getAlignmentByParliamentarianId: jest.fn(),
   };
 
   beforeEach(() => {
@@ -44,6 +45,10 @@ describe('ParliamentarianController', () => {
     router.get(
       '/parlamentares/:id/temas',
       controller.getThemeProfileByParliamentarianId,
+    );
+    router.get(
+      '/parlamentares/:id/alinhamento',
+      controller.getAlignmentByParliamentarianId,
     );
     router.get('/parlamentares/:id', controller.getParliamentarianById);
 
@@ -736,6 +741,55 @@ describe('ParliamentarianController', () => {
       );
 
       const response = await request(app).get('/parlamentares/999/temas');
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('GET /parlamentares/:id/alinhamento', () => {
+    /**
+     * A taxa so existia dentro de `/perfil`, que dispara todas as consultas do
+     * parlamentar. O cliente pagava um perfil inteiro para preencher um card.
+     */
+    it('should return 200 with the alignment alone', async () => {
+      const payload = {
+        disponivel: true,
+        taxa: 87.5,
+        motivo: null,
+        seguiu: 35,
+        divergiu: 5,
+        consideradas: 40,
+        liberadas: 3,
+        bancadaNaoResolvida: 0,
+        minimoParaTaxa: 20,
+        fonteFiliacao: 'historico',
+      };
+      serviceMock.getAlignmentByParliamentarianId.mockResolvedValue(payload);
+
+      const response = await request(app).get('/parlamentares/1/alinhamento');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual(payload);
+      expect(serviceMock.getAlignmentByParliamentarianId).toHaveBeenCalledWith(1);
+    });
+
+    it('should return 400 when id is invalid', async () => {
+      const response = await request(app).get('/parlamentares/abc/alinhamento');
+
+      expect(response.status).toBe(400);
+      expect(serviceMock.getAlignmentByParliamentarianId).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Sem o 404, um id inexistente devolveria um payload valido e vazio — que a
+     * interface leria como "parlamentar sem comparacoes".
+     */
+    it('should return 404 when parliamentarian is not found', async () => {
+      serviceMock.getAlignmentByParliamentarianId.mockRejectedValue(
+        new NotFoundError('Parlamentar não encontrado.'),
+      );
+
+      const response = await request(app).get('/parlamentares/999/alinhamento');
 
       expect(response.status).toBe(404);
     });

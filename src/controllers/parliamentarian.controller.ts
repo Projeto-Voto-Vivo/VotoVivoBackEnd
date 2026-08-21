@@ -203,6 +203,22 @@ export class ParliamentarianController {
     }
   };
 
+  getAlignmentByParliamentarianId = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const id = parsePositiveInt(req.params.id, 'id');
+      const result =
+        await this.parliamentarianService.getAlignmentByParliamentarianId(id);
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
   getThemeProfileByParliamentarianId = async (
     req: Request,
     res: Response,

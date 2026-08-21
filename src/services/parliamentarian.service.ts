@@ -241,6 +241,23 @@ export class ParliamentarianService {
     return this.themeProfileService.getThemeProfile(parliamentarianId, limite);
   }
 
+  /**
+   * Fidelidade partidaria isolada.
+   *
+   * Existe como metodo proprio porque a taxa so vivia dentro de
+   * `getAggregatedProfile`, que dispara todas as consultas do parlamentar — o
+   * cliente pagava um perfil inteiro para preencher um card.
+   *
+   * O 404 e daqui: o `AlignmentService` nao valida existencia, e sem esta
+   * checagem um id inexistente devolveria um payload valido e vazio, que a
+   * interface leria como "parlamentar sem comparacoes".
+   */
+  async getAlignmentByParliamentarianId(parliamentarianId: number) {
+    await this.ensureParliamentarianExists(parliamentarianId);
+
+    return this.alignmentService.getAlignmentByParliamentarianId(parliamentarianId);
+  }
+
   async listExpensesByParliamentarianId(
     parliamentarianId: number,
     filters: ListExpensesFilters,

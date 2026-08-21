@@ -31,6 +31,11 @@ parliamentarianRouter.get(
 );
 
 parliamentarianRouter.get(
+  '/parlamentares/:id/alinhamento',
+  parliamentarianController.getAlignmentByParliamentarianId,
+);
+
+parliamentarianRouter.get(
   '/parlamentares/:id/temas',
   parliamentarianController.getThemeProfileByParliamentarianId,
 );

@@ -919,4 +919,32 @@ describe('ParliamentarianService', () => {
       );
     });
   });
+
+  describe('getAlignmentByParliamentarianId', () => {
+    it('should delegate to the alignment service', async () => {
+      prismaMock.parliamentarian.findUnique.mockResolvedValue({
+        id: 1,
+        role: 'Deputado(a)',
+      });
+      prismaMock.partyAffiliation.count.mockResolvedValue(1);
+      prismaMock.$queryRaw.mockResolvedValue([]);
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result).toEqual(
+        expect.objectContaining({ disponivel: true, minimoParaTaxa: 20 }),
+      );
+    });
+
+    /** O AlignmentService não valida existência; o 404 tem de vir daqui. */
+    it('should throw NotFoundError when parliamentarian does not exist', async () => {
+      prismaMock.parliamentarian.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.getAlignmentByParliamentarianId(999),
+      ).rejects.toBeInstanceOf(NotFoundError);
+
+      expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
+    });
+  });
 });
