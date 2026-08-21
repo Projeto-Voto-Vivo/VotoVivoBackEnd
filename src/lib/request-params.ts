@@ -53,10 +53,41 @@ export function parsePagination(query: Record<string, unknown>): Pagination {
 }
 
 export function buildMeta(total: number, page: number, limit: number) {
+  const lastPage = Math.max(1, Math.ceil(total / limit));
+
   return {
     total,
     page,
-    lastPage: Math.max(1, Math.ceil(total / limit)),
+    lastPage,
     limit,
+    temProximaPagina: page < lastPage,
   };
+}
+
+/**
+ * Meta de uma pagina que nao contou o total.
+ *
+ * `COUNT(*)` com os mesmos filtros da listagem e uma segunda varredura completa
+ * da tabela — com `?busca=`, dobra o custo da requisicao mais cara da API. Um
+ * cliente de rolagem infinita nao precisa de `lastPage`, so precisa saber se ha
+ * mais alguma coisa; `temProximaPagina` sai de buscar uma linha a mais, o que
+ * custa praticamente nada.
+ */
+export function buildMetaSemContagem(
+  page: number,
+  limit: number,
+  temProximaPagina: boolean,
+) {
+  return {
+    total: null,
+    page,
+    lastPage: null,
+    limit,
+    temProximaPagina,
+  };
+}
+
+/** `?contarTotal=false` desliga a contagem. Qualquer outro valor mantem. */
+export function parseContarTotal(valor: unknown): boolean {
+  return valor !== 'false';
 }

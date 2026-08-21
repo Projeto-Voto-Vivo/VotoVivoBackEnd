@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { PropositionService } from '../services/proposition.service';
 import {
   getOptionalString,
+  parseContarTotal,
   parsePagination,
   parsePositiveInt,
 } from '../lib/request-params';
@@ -29,6 +30,7 @@ export class PropositionController {
               ? undefined
               : parsePositiveInt(query.autor, 'autor'),
         },
+        { contarTotal: parseContarTotal(query.contarTotal) },
       );
 
       res.status(200).json(result);

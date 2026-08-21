@@ -53,6 +53,7 @@ describe('PropositionController', () => {
           busca: undefined,
           autor: undefined,
         },
+        { contarTotal: true },
       );
     });
 
@@ -64,6 +65,7 @@ describe('PropositionController', () => {
       expect(serviceMock.listPropositions).toHaveBeenCalledWith(
         { page: 3, limit: 5 },
         expect.anything(),
+        expect.anything(),
       );
     });
 
@@ -74,6 +76,7 @@ describe('PropositionController', () => {
 
       expect(serviceMock.listPropositions).toHaveBeenCalledWith(
         { page: 1, limit: 100 },
+        expect.anything(),
         expect.anything(),
       );
     });
@@ -163,6 +166,7 @@ describe('PropositionController', () => {
           casa: 'camara',
           situacao: 'tramitação',
         }),
+        expect.anything(),
       );
     });
 
@@ -180,6 +184,7 @@ describe('PropositionController', () => {
           busca: undefined,
           autor: undefined,
         },
+        { contarTotal: true },
       );
     });
 
@@ -191,6 +196,7 @@ describe('PropositionController', () => {
       expect(serviceMock.listPropositions).toHaveBeenCalledWith(
         { page: 1, limit: 20 },
         expect.objectContaining({ tema: 'Saúde', busca: 'transparência' }),
+        expect.anything(),
       );
     });
 
@@ -200,6 +206,30 @@ describe('PropositionController', () => {
       expect(response.status).toBe(400);
       expect(response.body).toEqual({ message: 'Parâmetro inválido: ano.' });
       expect(serviceMock.listPropositions).not.toHaveBeenCalled();
+    });
+
+    /**
+     * `COUNT(*)` com os mesmos filtros e uma segunda varredura completa. Rolagem
+     * infinita nao precisa de `lastPage`, so de saber se ha mais.
+     */
+    it('should let the client skip the total count', async () => {
+      await request(app).get('/proposicoes?contarTotal=false');
+
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        { contarTotal: false },
+      );
+    });
+
+    it('should keep counting for any other value', async () => {
+      await request(app).get('/proposicoes?contarTotal=sim');
+
+      expect(serviceMock.listPropositions).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        { contarTotal: true },
+      );
     });
   });
 
@@ -243,6 +273,7 @@ describe('PropositionController', () => {
       expect(serviceMock.listPropositions).toHaveBeenCalledWith(
         { page: 1, limit: 20 },
         expect.objectContaining({ autor: 7, tipo: 'PL', ano: 2024 }),
+        expect.anything(),
       );
     });
 

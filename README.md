@@ -54,6 +54,11 @@ PORT=3001
 # Restrição opcional de origem. Vazio (padrão) libera qualquer origem.
 CORS_ORIGINS=""
 
+# Cache. Em desenvolvimento vale deixar tudo em 0.
+CACHE_MAX_AGE=0          # Cache-Control: max-age (navegador), em segundos
+CACHE_S_MAXAGE=0         # Cache-Control: s-maxage (CDN), em segundos
+CACHE_TTL_SEGUNDOS=0     # cache em memória de páginas e filtros; 0 desliga
+
 # Rate limit por IP no Express. RATE_LIMIT_MAX=0 desativa.
 RATE_LIMIT_MAX=120
 RATE_LIMIT_JANELA_SEGUNDOS=60
@@ -85,6 +90,55 @@ Duas consequências do schema atual que valem lembrar:
   `AUSENCIA JUSTIFICADA`, `AUSENTE`, `NAO REGISTRADO`). O Prisma lança erro em
   runtime ao ler um valor de enum desconhecido, então tirar um deles derruba
   toda votação que o contenha.
+
+### Cache e carga
+
+A API é somente-leitura sobre dados que só mudam quando o ETL roda. Isso permite
+uma estratégia de cache agressiva, em duas camadas.
+
+**1. Na borda (CDN).** Toda resposta GET sai com:
+
+```
+Cache-Control: public, max-age=300, s-maxage=86400,
+               stale-while-revalidate=604800, stale-if-error=604800
+```
+
+`s-maxage` é o que tira a carga do servidor — a invalidação vem de uma purga que
+o ETL dispara ao terminar, não do relógio. E `stale-if-error` é o mais valioso da
+lista: **se o banco cair, a borda continua servindo a última resposta boa**, e a
+queda deixa de ser visível para quem está lendo o site.
+
+Para a Cloudflare guardar isso é preciso uma Cache Rule — ela não cacheia JSON
+por conta própria. Em *Caching → Cache Rules*: `Eligible for cache`, Edge TTL
+"use cache-control header", e a query string na chave de cache (os filtros vivem
+nela).
+
+**2. Na aplicação.** `CACHE_TTL_SEGUNDOS` guarda páginas de `/proposicoes` e os
+domínios de `/proposicoes/filtros`. O cache guarda a **promessa**, não o valor,
+então uma rajada de requisições idênticas com o cache frio faz uma consulta só em
+vez de N — medido: 30 requisições simultâneas idênticas passaram de 151 para 7
+`SELECT`s. Não há invalidação explícita (o ETL roda noutro processo), por isso o
+TTL é curto.
+
+Duas coisas que interagem com o cache e é fácil esquecer:
+
+- **Restringir `CORS_ORIGINS` fragmenta o cache.** Com uma lista, o pacote `cors`
+  passa a emitir `Vary: Origin` e o CDN mantém uma cópia por origem. O cache
+  esfria e a carga volta.
+- **`?contarTotal=false`** omite `meta.total` e `meta.lastPage`, evitando a
+  segunda varredura da tabela que o `COUNT(*)` faz. Rolagem infinita só precisa
+  de `meta.temProximaPagina`, que sai de buscar uma linha a mais.
+
+### Índices do banco
+
+`scripts/indices-recomendados.sql` traz os índices e chaves estrangeiras que as
+rotas desta API precisam — placar de votação, filtros de proposição, busca
+textual e o join de tramitação com órgão.
+
+Eles **não** estão no `schema.prisma` de propósito: o `schema.sql` do agregador é
+a fonte de verdade e o `npm run schema:check` exige diff vazio. Aplique o SQL no
+banco, leve o mesmo DDL para o agregador e só então espelhe no Prisma — nessa
+ordem, a verificação continua verde.
 
 ### Segurança
 

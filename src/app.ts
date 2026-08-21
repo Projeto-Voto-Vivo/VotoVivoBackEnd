@@ -7,6 +7,7 @@ import path from 'path';
 import { router } from './routes';
 import { errorHandler } from './middlewares/error-handler';
 import { rateLimit } from './middlewares/rate-limit';
+import { cacheControl } from './middlewares/cache-control';
 
 const app = express();
 const swaggerDocument = yaml.load(fs.readFileSync(path.join(__dirname, '../swagger.yaml'), 'utf8')) as Record<string, unknown>;
@@ -14,6 +15,10 @@ const swaggerDocument = yaml.load(fs.readFileSync(path.join(__dirname, '../swagg
 // Pre-requisito do rate limit: atras do nginx (que envia X-Forwarded-For),
 // sem isto `req.ip` seria o IP do proxy e o limite viraria global.
 app.set('trust proxy', 1);
+
+// ETag forte em vez do fraco padrao do Express: permite `If-None-Match` exato e
+// deixa a revalidacao da Cloudflare responder 304 sem corpo.
+app.set('etag', 'strong');
 
 // A API e somente-leitura: o banco e alimentado exclusivamente pelo ETL.
 // Sem `express.json()` — nao ha corpo de requisicao a interpretar.
@@ -46,7 +51,9 @@ app.use((req, res, next) => {
 // por carregamento e consumiriam a cota de um usuario legitimo.
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-app.use(rateLimit());
+// Antes do router e depois do rate limit: um 429 nao pode ser cacheado como
+// se fosse resposta boa.
+app.use(cacheControl());
 app.use(router);
 
 app.get('/', (_req, res) => {

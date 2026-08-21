@@ -6,8 +6,19 @@ services:
       MYSQL_DATABASE: votovivo
       MYSQL_ROOT_PASSWORD: test
     command:
-      - --innodb-buffer-pool-size=64M
-      - --max-connections=50
+      # Era 64M num banco cujo dump ja passa de 50MB de dados brutos, sem contar
+      # indices: praticamente toda consulta ia a disco, e disco de free tier e
+      # lento. Sob concorrencia isso vira fila, e fila vira queda.
+      # Regra pratica: 50-60% da RAM dedicada ao MySQL.
+      - --innodb-buffer-pool-size=320M
+      - --innodb-log-file-size=64M
+      # Evita cache duplo entre o InnoDB e o page cache do SO.
+      - --innodb-flush-method=O_DIRECT
+      # 50 conexoes num container deste tamanho e ficcao: cada uma custa memoria.
+      # O teto real fica no cliente (connection_limit na DATABASE_URL).
+      - --max-connections=20
+      # Instrumentacao que ninguem le aqui, e que sozinha reserva ~100MB.
+      - --performance-schema=OFF
     ports:
       - "127.0.0.1:3306:3306"
     volumes:
@@ -20,21 +31,37 @@ services:
     deploy:
       resources:
         limits:
-          memory: 300M
+          memory: 512M
 
   api:
     build: .
     container_name: votovivo_api
     environment:
-      DATABASE_URL: mysql://root:test@mysql_db:3306/votovivo
+      # connection_limit limita o pool do Prisma: sem ele o cliente abre conexoes
+      # conforme a concorrencia ate estourar o max-connections. Oito saturam o
+      # banco muito antes de vinte o derrubarem, e a fila passa a acontecer na
+      # aplicacao, onde da para observar.
+      DATABASE_URL: mysql://root:test@mysql_db:3306/votovivo?connection_limit=8&pool_timeout=20
       PORT: 3001
+      # Vazio libera qualquer origem. ATENCAO: restringir faz o pacote `cors`
+      # emitir `Vary: Origin`, e a Cloudflare passa a manter uma copia do cache
+      # POR ORIGEM — o cache esfria e a carga volta para o servidor.
       CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # Rede de seguranca. O teto de volume deve ficar na Cloudflare
+      # (WAF > Rate limiting rules): assim o trafego abusivo nem gasta CPU aqui.
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-120}
       RATE_LIMIT_JANELA_SEGUNDOS: ${RATE_LIMIT_JANELA_SEGUNDOS:-60}
+      # Janela do navegador e janela do CDN. A invalidacao vem da purga que o ETL
+      # dispara ao terminar, nao do relogio — por isso o s-maxage e longo.
+      CACHE_MAX_AGE: ${CACHE_MAX_AGE:-300}
+      CACHE_S_MAXAGE: ${CACHE_S_MAXAGE:-86400}
+      # Cache em memoria de contagens e dominios de filtro. Curto de proposito:
+      # o ETL roda noutro processo e nao tem como invalidar isto.
+      CACHE_TTL_SEGUNDOS: ${CACHE_TTL_SEGUNDOS:-60}
       NODE_OPTIONS: --max-old-space-size=256
     ports:
       # Expõe a API na porta 80 do servidor para a Cloudflare acessar
-      - "80:3001" 
+      - "80:3001"
     depends_on:
       mysql_db:
         condition: service_healthy

@@ -63,7 +63,13 @@ describe('VotingService', () => {
         numero: '123',
         ano: 2024,
       });
-      expect(result.meta).toEqual({ total: 1, page: 1, lastPage: 1, limit: 20 });
+      expect(result.meta).toEqual({
+        total: 1,
+        page: 1,
+        lastPage: 1,
+        limit: 20,
+        temProximaPagina: false,
+      });
     });
 
     it('should return null proposicao and orgao when absent', async () => {

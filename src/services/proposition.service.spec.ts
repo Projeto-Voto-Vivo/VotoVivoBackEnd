@@ -76,7 +76,13 @@ describe('PropositionService', () => {
         dataApresentacao: '2024-02-01',
         temas: ['Administração Pública'],
       });
-      expect(result.meta).toEqual({ total: 1, page: 2, lastPage: 1, limit: 5 });
+      expect(result.meta).toEqual({
+        total: 1,
+        page: 2,
+        lastPage: 1,
+        limit: 5,
+        temProximaPagina: false,
+      });
     });
 
     it('should default to the standard page size', async () => {
@@ -563,7 +569,13 @@ describe('PropositionService', () => {
       expect(prismaMock.tramitacao.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ skip: 20, take: 20 }),
       );
-      expect(result.meta).toEqual({ total: 45, page: 2, lastPage: 3, limit: 20 });
+      expect(result.meta).toEqual({
+        total: 45,
+        page: 2,
+        lastPage: 3,
+        limit: 20,
+        temProximaPagina: true,
+      });
     });
 
     it('should throw NotFoundError when the proposition does not exist', async () => {
@@ -573,6 +585,111 @@ describe('PropositionService', () => {
         NotFoundError,
       );
       expect(prismaMock.tramitacao.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('cache de listagem', () => {
+    beforeEach(() => {
+      prismaMock.proposition.findMany.mockResolvedValue([]);
+      prismaMock.proposition.count.mockResolvedValue(0);
+    });
+
+    /**
+     * O caso que derruba um MySQL pequeno: varias requisicoes identicas chegando
+     * juntas. O `findMany` com os includes de tipo e tema gera varias consultas,
+     * entao cachear a pagina inteira vale muito mais que cachear so a contagem.
+     */
+    it('should hit the database once for repeated identical queries', async () => {
+      const serviceComCache = new PropositionService(prismaMock);
+
+      await Promise.all([
+        serviceComCache.listPropositions({ page: 1, limit: 20 }, { ano: 2024 }),
+        serviceComCache.listPropositions({ page: 1, limit: 20 }, { ano: 2024 }),
+        serviceComCache.listPropositions({ page: 1, limit: 20 }, { ano: 2024 }),
+      ]);
+
+      expect(prismaMock.proposition.findMany).toHaveBeenCalledTimes(1);
+      expect(prismaMock.proposition.count).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not mix pages or filters in the cache', async () => {
+      const serviceComCache = new PropositionService(prismaMock);
+
+      await serviceComCache.listPropositions({ page: 1, limit: 20 }, { ano: 2024 });
+      await serviceComCache.listPropositions({ page: 2, limit: 20 }, { ano: 2024 });
+      await serviceComCache.listPropositions({ page: 1, limit: 20 }, { ano: 2023 });
+
+      expect(prismaMock.proposition.findMany).toHaveBeenCalledTimes(3);
+    });
+
+    it('should not serve a counted page from an uncounted one', async () => {
+      const serviceComCache = new PropositionService(prismaMock);
+
+      await serviceComCache.listPropositions({ page: 1, limit: 20 }, {}, { contarTotal: true });
+      await serviceComCache.listPropositions({ page: 1, limit: 20 }, {}, { contarTotal: false });
+
+      expect(prismaMock.proposition.findMany).toHaveBeenCalledTimes(2);
+    });
+
+    it('should cache the filter domains', async () => {
+      prismaMock.propositionType.findMany.mockResolvedValue([]);
+      prismaMock.proposition.groupBy.mockResolvedValue([]);
+      prismaMock.tema.findMany.mockResolvedValue([]);
+      const serviceComCache = new PropositionService(prismaMock);
+
+      await Promise.all([
+        serviceComCache.listFilterOptions(),
+        serviceComCache.listFilterOptions(),
+      ]);
+
+      expect(prismaMock.propositionType.findMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('contagem opcional', () => {
+    beforeEach(() => {
+      prismaMock.proposition.count.mockResolvedValue(0);
+    });
+
+    /** `COUNT(*)` com os mesmos filtros e uma segunda varredura completa. */
+    it('should skip the count and probe one extra row instead', async () => {
+      prismaMock.proposition.findMany.mockResolvedValue([]);
+
+      const result = await service.listPropositions(
+        { page: 1, limit: 20 },
+        {},
+        { contarTotal: false },
+      );
+
+      expect(prismaMock.proposition.count).not.toHaveBeenCalled();
+      expect(prismaMock.proposition.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 21 }),
+      );
+      expect(result.meta).toEqual({
+        total: null,
+        page: 1,
+        lastPage: null,
+        limit: 20,
+        temProximaPagina: false,
+      });
+    });
+
+    it('should report a next page and trim the probe row', async () => {
+      const linha = {
+        id: 1, house: 'Camara', propositionType: { sigla: 'PL' }, number: '1',
+        year: 2024, summary: null, currentStatus: null, presentationDate: null,
+        temaProposicao: [],
+      };
+      prismaMock.proposition.findMany.mockResolvedValue(Array(3).fill(linha));
+
+      const result = await service.listPropositions(
+        { page: 1, limit: 2 },
+        {},
+        { contarTotal: false },
+      );
+
+      expect(result.data).toHaveLength(2);
+      expect(result.meta.temProximaPagina).toBe(true);
     });
   });
 });

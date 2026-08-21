@@ -40,7 +40,13 @@ describe('VoteService', () => {
         { id: 1, parlamentarId: 1, parlamentar: 'João da Silva', siglaPartido: 'PT', uf: 'SP', voto: 'SIM' },
         { id: 2, parlamentarId: 2, parlamentar: 'Maria Santos', siglaPartido: 'PT', uf: 'SP', voto: 'NAO' },
       ]);
-      expect(result.meta).toEqual({ total: 2, page: 1, lastPage: 1, limit: 20 });
+      expect(result.meta).toEqual({
+        total: 2,
+        page: 1,
+        lastPage: 1,
+        limit: 20,
+        temProximaPagina: false,
+      });
     });
 
     /**

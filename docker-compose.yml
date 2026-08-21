@@ -21,11 +21,14 @@ services:
     ports:
       - "127.0.0.1:3001:3001"
     environment:
-      DATABASE_URL: mysql://root:test@mysql_db:3306/votovivo
+      DATABASE_URL: mysql://root:test@mysql_db:3306/votovivo?connection_limit=8&pool_timeout=20
       PORT: 3001
       CORS_ORIGINS: ${CORS_ORIGINS:-}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-120}
       RATE_LIMIT_JANELA_SEGUNDOS: ${RATE_LIMIT_JANELA_SEGUNDOS:-60}
+      CACHE_MAX_AGE: ${CACHE_MAX_AGE:-0}
+      CACHE_S_MAXAGE: ${CACHE_S_MAXAGE:-0}
+      CACHE_TTL_SEGUNDOS: ${CACHE_TTL_SEGUNDOS:-0}
     depends_on:
       mysql_db:
         condition: service_healthy

@@ -758,6 +758,15 @@ paths:
             encontra `Saúde`.
           example: transparência
         - in: query
+          name: contarTotal
+          schema:
+            type: boolean
+            default: true
+          description: >
+            `false` omite `meta.total` e `meta.lastPage`. `COUNT(*)` com os mesmos
+            filtros é uma segunda varredura completa da tabela; rolagem infinita
+            não precisa dela, basta `meta.temProximaPagina`.
+        - in: query
           name: autor
           schema:
             type: integer
@@ -1342,12 +1351,21 @@ components:
     PaginationMeta:
       type: object
       properties:
+        temProximaPagina:
+          type: boolean
+          description: >
+            Sempre presente. É a única informação de paginação disponível quando
+            `contarTotal=false`.
         total:
           type: integer
+          nullable: true
+          description: '`null` quando a contagem foi omitida com `contarTotal=false`.'
         page:
           type: integer
         lastPage:
           type: integer
+          nullable: true
+          description: '`null` quando a contagem foi omitida com `contarTotal=false`.'
         limit:
           type: integer
 

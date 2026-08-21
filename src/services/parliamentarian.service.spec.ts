@@ -97,7 +97,13 @@ describe('ParliamentarianService', () => {
         cargo: 'Deputado(a)',
         condicaoMandato: 'Titular',
       });
-      expect(result.meta).toEqual({ total: 1, page: 1, lastPage: 1, limit: 20 });
+      expect(result.meta).toEqual({
+        total: 1,
+        page: 1,
+        lastPage: 1,
+        limit: 20,
+        temProximaPagina: false,
+      });
     });
 
     it('should paginate correctly for page 2', async () => {
@@ -109,7 +115,13 @@ describe('ParliamentarianService', () => {
       expect(prismaMock.parliamentarian.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ skip: 20, take: 20 }),
       );
-      expect(result.meta).toEqual({ total: 45, page: 2, lastPage: 3, limit: 20 });
+      expect(result.meta).toEqual({
+        total: 45,
+        page: 2,
+        lastPage: 3,
+        limit: 20,
+        temProximaPagina: true,
+      });
     });
 
     /**
@@ -279,7 +291,13 @@ describe('ParliamentarianService', () => {
           urlDocumento: 'https://example.com/nota.pdf',
         },
       ]);
-      expect(result.meta).toEqual({ total: 1, page: 1, lastPage: 1, limit: 20 });
+      expect(result.meta).toEqual({
+        total: 1,
+        page: 1,
+        lastPage: 1,
+        limit: 20,
+        temProximaPagina: false,
+      });
     });
 
     it('should apply year and month filter', async () => {
@@ -409,7 +427,13 @@ describe('ParliamentarianService', () => {
       expect(prismaMock.amendmentParliamentarian.findMany).toHaveBeenCalledWith(
         expect.objectContaining({ skip: 0, take: 20 }),
       );
-      expect(result.meta).toEqual({ total: 1, page: 1, lastPage: 1, limit: 20 });
+      expect(result.meta).toEqual({
+        total: 1,
+        page: 1,
+        lastPage: 1,
+        limit: 20,
+        temProximaPagina: false,
+      });
       expect(result.data[0]).toEqual(
         expect.objectContaining({
           id: 10,

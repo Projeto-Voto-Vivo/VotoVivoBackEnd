@@ -2,7 +2,13 @@ import { Prisma, PrismaClient, VoteChoice } from '@prisma/client';
 import { NotFoundError } from '../errors/http-errors';
 import { casaLegislativa } from '../lib/casas';
 import { montarPlacar, Placar, totalDoPlacar } from '../domain/placar';
-import { buildMeta, Pagination, TAMANHO_PAGINA_PADRAO } from '../lib/request-params';
+import { CacheTtl, chaveDeFiltros } from '../lib/cache';
+import {
+  buildMeta,
+  buildMetaSemContagem,
+  Pagination,
+  TAMANHO_PAGINA_PADRAO,
+} from '../lib/request-params';
 
 type PropositionRef = {
   id: number;
@@ -36,16 +42,49 @@ export type PropositionFilters = {
 const MAX_SITUACOES = 100;
 
 export class PropositionService {
+  /**
+   * Contagens e domínios de filtro só mudam quando o ETL roda. O cache guarda a
+   * *promessa*, então uma rajada de requisições idênticas com o cache frio faz
+   * uma consulta só em vez de N — que é o padrão que derruba um MySQL pequeno.
+   *
+   * De instância, não de módulo: o router cria um serviço, então na prática é
+   * um cache por processo — e cada teste começa com o cache limpo, sem estado
+   * global vazando de um caso para o outro.
+   */
+  private readonly cachePaginas = new CacheTtl({ maxEntradas: 200 });
+  private readonly cacheFiltros = new CacheTtl({ maxEntradas: 4 });
+
   constructor(private readonly prisma: PrismaClient) {}
 
   async listPropositions(
     pagination: Pagination = { page: 1, limit: TAMANHO_PAGINA_PADRAO },
     filters: PropositionFilters = {},
+    opcoes: { contarTotal?: boolean } = {},
+  ) {
+    // A pagina inteira entra no cache, nao so a contagem: o `findMany` com os
+    // includes de tipo e tema gera varias consultas, e e ele que domina o custo.
+    // Guardando o resultado completo, uma rajada de requisicoes identicas vira
+    // uma ida ao banco em vez de uma por requisicao.
+    return this.cachePaginas.resolver(
+      chaveDeFiltros('proposicoes', { ...pagination, ...filters, ...opcoes }),
+      () => this.carregarPropositions(pagination, filters, opcoes),
+    );
+  }
+
+  private async carregarPropositions(
+    pagination: Pagination,
+    filters: PropositionFilters,
+    opcoes: { contarTotal?: boolean },
   ) {
     const { page, limit } = pagination;
+    const contarTotal = opcoes.contarTotal !== false;
     const where = this.buildWhere(filters);
 
-    const [propositions, total] = await Promise.all([
+    // Sem contagem, busca uma linha a mais só para saber se há próxima página —
+    // custa praticamente nada e evita a segunda varredura da tabela.
+    const take = contarTotal ? limit : limit + 1;
+
+    const [encontradas, total] = await Promise.all([
       this.prisma.proposition.findMany({
         where,
         include: {
@@ -54,10 +93,15 @@ export class PropositionService {
         },
         orderBy: [{ year: 'desc' }, { id: 'desc' }],
         skip: (page - 1) * limit,
-        take: limit,
+        take,
       }),
-      this.prisma.proposition.count({ where }),
+      contarTotal ? this.prisma.proposition.count({ where }) : Promise.resolve(null),
     ]);
+
+    const temProximaPagina = contarTotal
+      ? page * limit < (total ?? 0)
+      : encontradas.length > limit;
+    const propositions = contarTotal ? encontradas : encontradas.slice(0, limit);
 
     return {
       data: propositions.map((proposition) => ({
@@ -73,7 +117,10 @@ export class PropositionService {
       })),
       // `meta.total` reflete o filtro aplicado: é o que permite ao cliente
       // paginar de verdade em vez de baixar tudo e filtrar em memória.
-      meta: buildMeta(total, page, limit),
+      meta:
+        total === null
+          ? buildMetaSemContagem(page, limit, temProximaPagina)
+          : buildMeta(total, page, limit),
       filtros: {
         tipo: filters.tipo ?? null,
         ano: filters.ano ?? null,
@@ -98,6 +145,13 @@ export class PropositionService {
    * cada request.
    */
   async listFilterOptions() {
+    return this.cacheFiltros.resolver('proposicoes:filtros', () =>
+      this.carregarFilterOptions(),
+    );
+  }
+
+  /** Cinco agregações; é a rota mais cara por requisição da API. */
+  private async carregarFilterOptions() {
     const [tipos, anos, situacoes, casas, temas] = await Promise.all([
       this.prisma.propositionType.findMany({
         select: { sigla: true, nome: true, casa: true },
