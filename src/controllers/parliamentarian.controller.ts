@@ -1,5 +1,7 @@
 import { NextFunction, Request, Response } from 'express';
 import { ParliamentarianService } from '../services/parliamentarian.service';
+import { OBJETOS_VOTACAO, ObjetoVotacao } from '../domain/objeto-votacao';
+import { InvalidParameterError } from '../errors/http-errors';
 import {
   getOptionalNumber,
   getOptionalString,
@@ -235,6 +237,10 @@ export class ParliamentarianController {
         await this.parliamentarianService.getThemeProfileByParliamentarianId(
           id,
           limite,
+          {
+            objeto: parseObjeto(req.query.objeto),
+            apenasMerito: req.query.apenasMerito === 'true',
+          },
         );
 
       res.status(200).json(result);
@@ -258,4 +264,25 @@ export class ParliamentarianController {
       next(error);
     }
   };
+}
+
+/**
+ * `objeto` fora do dominio vira 400 em vez de ser ignorado: um filtro que o
+ * servidor descarta em silencio devolve a lista inteira e o cliente acredita
+ * que ela ja esta recortada.
+ */
+function parseObjeto(valor: unknown): ObjetoVotacao | undefined {
+  const objeto = getOptionalString(valor);
+
+  if (!objeto) {
+    return undefined;
+  }
+
+  const normalizado = objeto.toUpperCase() as ObjetoVotacao;
+
+  if (!OBJETOS_VOTACAO.includes(normalizado)) {
+    throw new InvalidParameterError('objeto');
+  }
+
+  return normalizado;
 }

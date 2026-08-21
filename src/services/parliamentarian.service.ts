@@ -10,8 +10,9 @@ import {
   resumirBalde,
 } from '../domain/presence';
 import { cargoDaCasa } from '../lib/casas';
+import { classificarObjeto, ehMerito } from '../domain/objeto-votacao';
 import { AlignmentService } from './alignment.service';
-import { ThemeProfileService } from './theme-profile.service';
+import { FiltroObjeto, ThemeProfileService } from './theme-profile.service';
 import {
   buildMeta,
   Pagination,
@@ -235,10 +236,15 @@ export class ParliamentarianService {
   async getThemeProfileByParliamentarianId(
     parliamentarianId: number,
     limite?: number,
+    filtros: FiltroObjeto = {},
   ) {
     await this.ensureParliamentarianExists(parliamentarianId);
 
-    return this.themeProfileService.getThemeProfile(parliamentarianId, limite);
+    return this.themeProfileService.getThemeProfile(
+      parliamentarianId,
+      limite,
+      filtros,
+    );
   }
 
   /**
@@ -510,6 +516,8 @@ export class ParliamentarianService {
           titulo: this.formatVotingTitle(proposition),
           tema: proposition?.summary ?? null,
           resumo: vote.voting.subjectSummary,
+          objeto: classificarObjeto(vote.voting.subjectSummary),
+          merito: ehMerito(classificarObjeto(vote.voting.subjectSummary)),
           voto: vote.choice,
           resultado: vote.voting.finalResult,
           tipo: vote.voting.votingType,

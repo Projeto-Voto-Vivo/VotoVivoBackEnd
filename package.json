@@ -18,7 +18,8 @@
     "test:coverage": "jest --coverage",
     "prisma:pull": "prisma db pull",
     "prisma:studio": "prisma studio",
-    "schema:check": "bash scripts/schema-check.sh"
+    "schema:check": "bash scripts/schema-check.sh",
+    "verifica:objeto": "bash scripts/verifica-objeto-votacao.sh"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.8.0",

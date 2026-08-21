@@ -359,7 +359,8 @@ async function main() {
       idOrgao: plenarioCamara.idOrgao,
       eventId: sessaoDeliberativaCamara.id,
       votingDate: new Date('2024-03-15T18:00:00'),
-      subjectSummary: 'Votacao do PL 1234/2024 sobre transparencia publica digital.',
+      // Redacao no formato real da Camara: e o que o classificador de objeto le.
+      subjectSummary: 'Aprovado o Projeto de Lei n 1.234, de 2024.',
       finalResult: 'Aprovado',
       votingType: 'NOMINAL',
       orientations: {
@@ -379,7 +380,7 @@ async function main() {
       propositionId: pecCamara.id,
       idOrgao: plenarioCamara.idOrgao,
       votingDate: new Date('2024-03-20T19:00:00'),
-      subjectSummary: 'Votacao da PEC 45/2024 sobre participacao cidada.',
+      subjectSummary: 'Rejeitadas as Emendas ao Substitutivo.',
       finalResult: 'Rejeitado',
       votingType: 'NOMINAL',
       orientations: {
@@ -400,7 +401,7 @@ async function main() {
       idOrgao: plenarioSenado.idOrgao,
       eventId: sessaoSenado2025.id,
       votingDate: new Date('2025-03-11T18:30:00'),
-      subjectSummary: 'Votacao do PL 1234/2024 no Senado.',
+      subjectSummary: 'Aprovado o parecer do relator.',
       finalResult: 'Aprovado',
       votingType: 'NOMINAL',
     },
@@ -414,7 +415,7 @@ async function main() {
       casa: 'Camara',
       idOrgao: plenarioCamara.idOrgao,
       votingDate: new Date('2024-04-02T15:00:00'),
-      subjectSummary: 'Requerimento de urgencia.',
+      subjectSummary: 'Aprovado, por unanimidade, o Requerimento de Urgencia (Art. 155 do RICD).',
       finalResult: 'Aprovado',
       votingType: 'SIMBOLICA',
     },

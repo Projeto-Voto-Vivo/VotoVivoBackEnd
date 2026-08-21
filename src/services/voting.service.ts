@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import { NotFoundError } from '../errors/http-errors';
+import { classificarObjeto, ehMerito } from '../domain/objeto-votacao';
 import { montarPlacar, totalDoPlacar } from '../domain/placar';
 import { buildMeta, Pagination, TAMANHO_PAGINA_PADRAO } from '../lib/request-params';
 
@@ -33,6 +34,9 @@ export class VotingService {
         resumo: v.subjectSummary,
         resultado: v.finalResult,
         tipo: v.votingType,
+        // Sobre O QUE se votou. Sem isto, SIM e NAO nao tem significado estavel.
+        objeto: classificarObjeto(v.subjectSummary),
+        merito: ehMerito(classificarObjeto(v.subjectSummary)),
         orgao: v.orgao
           ? {
               id: v.orgao.idOrgao,
@@ -94,6 +98,8 @@ export class VotingService {
       resumo: voting.subjectSummary,
       resultado: voting.finalResult,
       tipo: voting.votingType,
+      objeto: classificarObjeto(voting.subjectSummary),
+      merito: ehMerito(classificarObjeto(voting.subjectSummary)),
       // Votação em comissão e votação em plenário não se leem do mesmo jeito.
       orgao: voting.orgao
         ? {

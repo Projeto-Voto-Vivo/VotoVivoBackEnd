@@ -1,4 +1,10 @@
 import { Prisma, PrismaClient } from '@prisma/client';
+import {
+  filtroMeritoSql,
+  filtroObjetoSql,
+  ObjetoVotacao,
+  OBJETOS_DE_MERITO,
+} from '../domain/objeto-votacao';
 import { toNumber } from '../lib/metricas';
 
 /**
@@ -40,16 +46,58 @@ type LinhaVoto = {
 
 type Contagem = { total: bigint | number };
 
+export type FiltroObjeto = {
+  /** Restringe a uma categoria de objeto votado. */
+  objeto?: ObjetoVotacao;
+  /**
+   * Restringe aos votos de mérito — onde SIM significa apoio ao que se votou.
+   * É o recorte que torna "os temas em que mais vota a favor" defensável.
+   */
+  apenasMerito?: boolean;
+};
+
+const COLUNA_RESUMO = Prisma.sql`va.resumoMateria`;
+
+/**
+ * Condição SQL do recorte pedido, ou vazio quando não há recorte.
+ *
+ * Vive aqui e não espalhada pelas consultas para que a lista por tema, o total
+ * e os contadores de exclusão usem exatamente o mesmo filtro — se divergirem,
+ * os números do payload deixam de fechar entre si.
+ */
+function condicaoDoFiltro(filtros: FiltroObjeto): Prisma.Sql {
+  const partes: Prisma.Sql[] = [];
+
+  if (filtros.objeto) {
+    partes.push(filtroObjetoSql(COLUNA_RESUMO, filtros.objeto));
+  }
+
+  if (filtros.apenasMerito) {
+    partes.push(filtroMeritoSql(COLUNA_RESUMO));
+  }
+
+  return partes.length
+    ? Prisma.sql` AND ${Prisma.join(partes, ' AND ')}`
+    : Prisma.empty;
+}
+
 export class ThemeProfileService {
   constructor(private readonly prisma: PrismaClient) {}
 
-  async getThemeProfile(parliamentarianId: number, limite = LIMITE_PADRAO) {
+  async getThemeProfile(
+    parliamentarianId: number,
+    limite = LIMITE_PADRAO,
+    filtros: FiltroObjeto = {},
+  ) {
     const limit = Prisma.raw(String(Math.max(1, Math.trunc(limite))));
+    const filtro = condicaoDoFiltro(filtros);
 
     const [autoria, votos, totais] = await Promise.all([
+      // A autoria não é filtrada por objeto: quem propôs uma matéria a propôs,
+      // independentemente do que se votou depois.
       this.autoriaPorTema(parliamentarianId, limit),
-      this.votosPorTema(parliamentarianId, limit),
-      this.totais(parliamentarianId),
+      this.votosPorTema(parliamentarianId, limit, filtro),
+      this.totais(parliamentarianId, filtro),
     ]);
 
     return {
@@ -86,15 +134,26 @@ export class ThemeProfileService {
       metadata: {
         limite: Number(limite),
         agrupamento: 'tema.descricao',
+        filtro: {
+          objeto: filtros.objeto ?? null,
+          apenasMerito: Boolean(filtros.apenasMerito),
+          objetosDeMerito: OBJETOS_DE_MERITO,
+        },
         observacao:
           'Uma proposição pode ter vários temas e conta em cada um — a soma por tema é maior que o total. ' +
-          'votosSim/votosNao são o voto registrado em votações de proposições do tema, não posição sobre o tema: ' +
-          'a votação pode ser sobre destaque, requerimento de urgência ou texto principal, e o objeto não é distinguível no dado. ' +
-          'Temas da Câmara e do Senado são agrupados apenas quando a descrição é idêntica.',
+          (filtros.apenasMerito || filtros.objeto
+            ? 'O recorte por objeto já foi aplicado: votosSim/votosNao contam apenas votações do tipo pedido.'
+            : 'votosSim/votosNao são o voto registrado em votações de proposições do tema, não posição sobre o tema: ' +
+              'a mesma lista mistura texto principal, destaque e requerimento de urgência. ' +
+              'Use apenasMerito=true para restringir às votações em que SIM significa apoio.') +
+          ' Temas da Câmara e do Senado são agrupados apenas quando a descrição é idêntica.',
         exclusoes: [
           'votos em votações sem proposição vinculada (requerimentos, questões de ordem)',
           'votos em proposições sem tema registrado',
           'ausências e voto não registrado (não há posição a contar)',
+          ...(filtros.objeto || filtros.apenasMerito
+            ? ['votações fora do recorte de objeto pedido']
+            : []),
         ],
       },
     };
@@ -116,7 +175,11 @@ export class ThemeProfileService {
     `;
   }
 
-  private votosPorTema(parliamentarianId: number, limit: Prisma.Sql) {
+  private votosPorTema(
+    parliamentarianId: number,
+    limit: Prisma.Sql,
+    filtro: Prisma.Sql,
+  ) {
     // Ordena por SIM+NAO, não por total: são os votos com posição de mérito.
     // Um tema com 50 obstruções e 1 SIM não é onde o parlamentar mais se
     // posiciona.
@@ -132,6 +195,7 @@ export class ThemeProfileService {
       JOIN temaProposicao tp ON tp.idProposicao = va.idProposicao
       JOIN tema t            ON t.idTema = tp.idTema
       WHERE v.idParlamentar = ${parliamentarianId}
+        ${filtro}
       GROUP BY t.descricao
       ORDER BY SUM(v.votoRegistrado = 'SIM') + SUM(v.votoRegistrado = 'NAO') DESC,
                t.descricao ASC
@@ -140,7 +204,7 @@ export class ThemeProfileService {
   }
 
   /** Denominadores e exclusões — o que a lista por tema não mostra. */
-  private async totais(parliamentarianId: number) {
+  private async totais(parliamentarianId: number, filtro: Prisma.Sql) {
     const [proposicoes, proposicoesSemTema, votos, semProposicao, semTema] =
       await Promise.all([
         this.prisma.$queryRaw<Contagem[]>`
@@ -156,7 +220,11 @@ export class ThemeProfileService {
             )
         `,
         this.prisma.$queryRaw<Contagem[]>`
-          SELECT COUNT(*) AS total FROM voto WHERE idParlamentar = ${parliamentarianId}
+          SELECT COUNT(*) AS total
+          FROM voto v
+          JOIN votacao va ON va.idVotacao = v.idVotacao
+          WHERE v.idParlamentar = ${parliamentarianId}
+            ${filtro}
         `,
         this.prisma.$queryRaw<Contagem[]>`
           SELECT COUNT(*) AS total
@@ -164,6 +232,7 @@ export class ThemeProfileService {
           JOIN votacao va ON va.idVotacao = v.idVotacao
           WHERE v.idParlamentar = ${parliamentarianId}
             AND va.idProposicao IS NULL
+            ${filtro}
         `,
         this.prisma.$queryRaw<Contagem[]>`
           SELECT COUNT(*) AS total
@@ -174,6 +243,7 @@ export class ThemeProfileService {
             AND NOT EXISTS (
               SELECT 1 FROM temaProposicao tp WHERE tp.idProposicao = va.idProposicao
             )
+            ${filtro}
         `,
       ]);
 

@@ -83,6 +83,54 @@ describe('contrato do swagger', () => {
     expect(escrita).toEqual([]);
   });
 
+  /**
+   * Um `$ref` para um schema inexistente nao quebra o parse do YAML nem a
+   * comparacao de rotas — o Swagger UI so mostra o campo vazio. Ja aconteceu:
+   * uma edicao que substituiu um intervalo do arquivo levou junto cinco
+   * schemas que viviam ali dentro, e nada acusou.
+   */
+  it('should not reference a schema that does not exist', () => {
+    const documento = yaml.load(
+      fs.readFileSync(path.join(__dirname, '../swagger.yaml'), 'utf8'),
+    ) as { components: { schemas: Record<string, unknown> } };
+
+    const definidos = new Set(Object.keys(documento.components.schemas));
+    const referenciados = new Set<string>();
+
+    JSON.stringify(documento).replace(
+      /#\/components\/schemas\/([A-Za-z0-9_]+)/g,
+      (_todo, nome: string) => {
+        referenciados.add(nome);
+        return _todo;
+      },
+    );
+
+    const quebradas = [...referenciados].filter((nome) => !definidos.has(nome));
+
+    expect(quebradas).toEqual([]);
+  });
+
+  it('should not define a schema that nothing references', () => {
+    const documento = yaml.load(
+      fs.readFileSync(path.join(__dirname, '../swagger.yaml'), 'utf8'),
+    ) as { components: { schemas: Record<string, unknown> } };
+
+    const referenciados = new Set<string>();
+    JSON.stringify(documento).replace(
+      /#\/components\/schemas\/([A-Za-z0-9_]+)/g,
+      (_todo, nome: string) => {
+        referenciados.add(nome);
+        return _todo;
+      },
+    );
+
+    const orfaos = Object.keys(documento.components.schemas).filter(
+      (nome) => !referenciados.has(nome),
+    );
+
+    expect(orfaos).toEqual([]);
+  });
+
   it('should declare the canonical seven-value vote enum', () => {
     const componentes = (
       yaml.load(

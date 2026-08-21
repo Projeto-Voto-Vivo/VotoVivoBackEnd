@@ -710,6 +710,7 @@ describe('ParliamentarianController', () => {
       expect(serviceMock.getThemeProfileByParliamentarianId).toHaveBeenCalledWith(
         1,
         undefined,
+        { objeto: undefined, apenasMerito: false },
       );
     });
 
@@ -718,7 +719,11 @@ describe('ParliamentarianController', () => {
 
       await request(app).get('/parlamentares/1/temas?limite=5');
 
-      expect(serviceMock.getThemeProfileByParliamentarianId).toHaveBeenCalledWith(1, 5);
+      expect(serviceMock.getThemeProfileByParliamentarianId).toHaveBeenCalledWith(
+        1,
+        5,
+        expect.anything(),
+      );
     });
 
     it('should return 400 when id is invalid', async () => {
@@ -792,6 +797,58 @@ describe('ParliamentarianController', () => {
       const response = await request(app).get('/parlamentares/999/alinhamento');
 
       expect(response.status).toBe(404);
+    });
+  });
+
+  describe('GET /parlamentares/:id/temas com recorte de objeto', () => {
+    beforeEach(() => {
+      serviceMock.getThemeProfileByParliamentarianId.mockResolvedValue({});
+    });
+
+    /**
+     * O recorte que torna "os temas em que mais vota a favor" defensável:
+     * restringe às votações em que SIM significa apoio.
+     */
+    it('should forward apenasMerito', async () => {
+      await request(app).get('/parlamentares/1/temas?apenasMerito=true');
+
+      expect(serviceMock.getThemeProfileByParliamentarianId).toHaveBeenCalledWith(
+        1,
+        undefined,
+        expect.objectContaining({ apenasMerito: true }),
+      );
+    });
+
+    it('should forward and normalise objeto', async () => {
+      await request(app).get('/parlamentares/1/temas?objeto=texto_base');
+
+      expect(serviceMock.getThemeProfileByParliamentarianId).toHaveBeenCalledWith(
+        1,
+        undefined,
+        expect.objectContaining({ objeto: 'TEXTO_BASE' }),
+      );
+    });
+
+    /**
+     * Um filtro descartado em silêncio devolve a lista inteira e o cliente
+     * acredita que ela já está recortada.
+     */
+    it('should return 400 for an unknown objeto', async () => {
+      const response = await request(app).get('/parlamentares/1/temas?objeto=QUALQUER');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toEqual({ message: 'Parâmetro inválido: objeto.' });
+      expect(serviceMock.getThemeProfileByParliamentarianId).not.toHaveBeenCalled();
+    });
+
+    it('should treat any value other than true as false for apenasMerito', async () => {
+      await request(app).get('/parlamentares/1/temas?apenasMerito=1');
+
+      expect(serviceMock.getThemeProfileByParliamentarianId).toHaveBeenCalledWith(
+        1,
+        undefined,
+        expect.objectContaining({ apenasMerito: false }),
+      );
     });
   });
 });

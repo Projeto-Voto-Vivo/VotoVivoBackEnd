@@ -548,6 +548,34 @@ paths:
             type: integer
             default: 10
           description: Temas retornados em cada bloco.
+        - in: query
+          name: apenasMerito
+          schema:
+            type: boolean
+            default: false
+          description: >
+            Restringe às votações em que SIM significa apoio ao que se votou
+            (`TEXTO_BASE`, `PARECER`, `EMENDA`, `DESTAQUE`). É o recorte que
+            torna "os temas em que mais vota a favor" uma afirmação defensável:
+            sem ele, a lista mistura mérito com requerimento de urgência e
+            redação final. Só `true` liga o filtro.
+        - in: query
+          name: objeto
+          schema:
+            type: string
+            enum:
+            - TEXTO_BASE
+            - PARECER
+            - EMENDA
+            - DESTAQUE
+            - REQUERIMENTO
+            - REDACAO_FINAL
+            - ENCAMINHAMENTO
+            - INDEFINIDO
+          description: >
+            Restringe a uma categoria de objeto votado. Valor fora do domínio
+            devolve 400 em vez de ser ignorado — um filtro descartado em
+            silêncio devolveria a lista inteira parecendo já recortada.
       responses:
         '200':
           description: Sucesso
@@ -1554,6 +1582,10 @@ components:
           type: string
           nullable: true
           description: Texto da deliberação/resultado retornado pela origem da votação.
+        objeto:
+          $ref: '#/components/schemas/ObjetoVotacao'
+        merito:
+          type: boolean
         voto:
           type: string
           description: >
@@ -1938,6 +1970,209 @@ components:
             `partidoAtual` indica que não havia histórico de filiação e o partido
             atual foi usado como aproximação.
 
+    ObjetoVotacao:
+      type: string
+      description: >
+        Sobre O QUE se votou, derivado de `votacao.resumoMateria` — que guarda o
+        campo `descricao` da API da Câmara, formulaico por vir do sistema da
+        Casa.
+
+
+        Existe porque SIM e NÃO não têm significado estável sem ele: a mesma
+        votação pode ser sobre o texto principal (SIM aprova a matéria), sobre
+        um destaque supressivo (NÃO é que preserva o texto), sobre um
+        requerimento de urgência (o voto é sobre o rito) ou sobre a redação
+        final (quase sempre unânime, ruído em qualquer estatística).
+
+
+        `INDEFINIDO` é falha segura — resumo nulo ou fora das listas
+        conhecidas. Medido em 2.500 votações reais: 0,8%.
+      enum:
+            - TEXTO_BASE
+            - PARECER
+            - EMENDA
+            - DESTAQUE
+            - REQUERIMENTO
+            - REDACAO_FINAL
+            - ENCAMINHAMENTO
+            - INDEFINIDO
+
+    PerfilTematico:
+      type: object
+      properties:
+        proposicoes:
+          type: object
+          properties:
+            temas:
+              type: array
+              description: Ordenado por número de proposições, decrescente.
+              items:
+                type: object
+                properties:
+                  tema:
+                    type: string
+                  total:
+                    type: integer
+            totalProposicoes:
+              type: integer
+              description: >
+                Total real de proposições de autoria. **Menor** que a soma da
+                lista por tema, porque uma proposição conta em cada tema seu.
+            semTema:
+              type: integer
+              description: Proposições de autoria sem tema registrado pelo ETL.
+        votacoes:
+          type: object
+          properties:
+            temas:
+              type: array
+              description: Ordenado por votos com posição de mérito (SIM + NÃO).
+              items:
+                type: object
+                properties:
+                  tema:
+                    type: string
+                  votosSim:
+                    type: integer
+                  votosNao:
+                    type: integer
+                  saldo:
+                    type: integer
+                    description: '`votosSim - votosNao`; negativo quando o NÃO prevalece.'
+                  abstencoes:
+                    type: integer
+                  obstrucoes:
+                    type: integer
+                  totalVotos:
+                    type: integer
+            totalVotos:
+              type: integer
+            excluidos:
+              type: object
+              properties:
+                votosSemProposicao:
+                  type: integer
+                  description: Requerimentos e questões de ordem — não classificam por tema.
+                votosEmProposicaoSemTema:
+                  type: integer
+        metadata:
+          type: object
+          properties:
+            limite:
+              type: integer
+            agrupamento:
+              type: string
+            filtro:
+              type: object
+              description: Recorte de objeto efetivamente aplicado.
+              properties:
+                objeto:
+                  type: string
+                  nullable: true
+                apenasMerito:
+                  type: boolean
+                objetosDeMerito:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ObjetoVotacao'
+            observacao:
+              type: string
+            exclusoes:
+              type: array
+              items:
+                type: string
+
+    OrgaoRef:
+      type: object
+      nullable: true
+      properties:
+        id:
+          type: integer
+        sigla:
+          type: string
+          nullable: true
+        nome:
+          type: string
+          nullable: true
+        tipoOrgao:
+          type: string
+          nullable: true
+        casa:
+          type: string
+          enum: [Camara, Senado, Congresso]
+
+    EtapaTramitacao:
+      type: object
+      properties:
+        id:
+          type: integer
+        sequencia:
+          type: integer
+          nullable: true
+        dataHora:
+          type: string
+          format: date-time
+          nullable: true
+        descricaoTramitacao:
+          type: string
+          nullable: true
+        descricaoSituacao:
+          type: string
+          nullable: true
+        despacho:
+          type: string
+          nullable: true
+        regime:
+          type: string
+          nullable: true
+          description: '`tipoTramitacao.regime` (ex.: Prioridade, Urgência).'
+        tipoTramitacao:
+          type: string
+          nullable: true
+        orgao:
+          $ref: '#/components/schemas/OrgaoRef'
+
+    Placar:
+      type: object
+      description: >
+        Contagem agregada no banco. As sete chaves estão sempre presentes,
+        zeradas quando não houve o voto — chave ausente obrigaria o cliente a
+        tratar `undefined` como zero. Os nomes são os do enum da API
+        (`AUSENCIA_JUSTIFICADA`, `NAO_REGISTRADO`), os mesmos do campo `voto`.
+      properties:
+        SIM:
+          type: integer
+        NAO:
+          type: integer
+        ABSTENCAO:
+          type: integer
+        OBSTRUCAO:
+          type: integer
+        AUSENCIA_JUSTIFICADA:
+          type: integer
+        AUSENTE:
+          type: integer
+        NAO_REGISTRADO:
+          type: integer
+
+    AutorParlamentar:
+      type: object
+      properties:
+        id:
+          type: integer
+        nomeParlamentar:
+          type: string
+        siglaPartido:
+          type: string
+        uf:
+          type: string
+        urlFoto:
+          type: string
+          format: uri
+        cargo:
+          type: string
+          nullable: true
+
     Comissao:
       type: object
       properties:
@@ -1966,6 +2201,13 @@ components:
           type: integer
         apiId:
           type: string
+        objeto:
+          $ref: '#/components/schemas/ObjetoVotacao'
+        merito:
+          type: boolean
+          description: >
+            `true` quando o voto tem posição de mérito. Use para separar o que
+            diz o que o parlamentar pensa da matéria do que é apenas rito.
         orgao:
           $ref: '#/components/schemas/OrgaoRef'
         casa:
@@ -2023,6 +2265,10 @@ components:
         tipo:
           type: string
           nullable: true
+        objeto:
+          $ref: '#/components/schemas/ObjetoVotacao'
+        merito:
+          type: boolean
         orgao:
           $ref: '#/components/schemas/OrgaoRef'
         proposicao:

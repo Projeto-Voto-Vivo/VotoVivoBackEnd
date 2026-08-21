@@ -194,9 +194,28 @@ A documentação interativa está disponível via Swagger UI após iniciar o ser
 | `GET` | `/parlamentares/:id/proposicoes` | Proposições das quais o parlamentar é autor, paginadas |
 | `GET` | `/parlamentares/:id/presenca` | Assiduidade a partir da tabela `presenca`, com plenário e comissões separados e metodologia rotulada por casa |
 | `GET` | `/parlamentares/:id/comissoes` | Órgãos colegiados de que o parlamentar participa (`membroOrgao`) |
-| `GET` | `/parlamentares/:id/temas` | Perfil temático: em que temas mais legisla e como vota em proposições de cada tema |
+| `GET` | `/parlamentares/:id/temas` | Perfil temático, com recorte opcional por objeto (`apenasMerito`, `objeto`) |
+| `GET` | `/parlamentares/:id/alinhamento` | Fidelidade partidária isolada, sem pagar o perfil inteiro |
 | `GET` | `/parlamentares/:id/emendas` | Emendas vinculadas, paginadas, com `metodoVinculo` e `confiancaVinculo` |
 | `GET` | `/parlamentares/:id/emendas/resumo` | Totais agregados de emendas (empenhado, liquidado, pago) |
+
+> **O objeto da votação.** `votacao.resumoMateria` guarda o campo `descricao`
+> da API da Câmara, que é formulaico — o que permite classificar **sobre o que**
+> se votou: `TEXTO_BASE`, `PARECER`, `EMENDA`, `DESTAQUE`, `REQUERIMENTO`,
+> `REDACAO_FINAL`, `ENCAMINHAMENTO` ou `INDEFINIDO`. Medido em 2.500 votações
+> reais: 0,8% de `INDEFINIDO`.
+>
+> Existe porque SIM e NÃO não têm significado estável sem ele: votar SIM num
+> destaque supressivo é votar *contra* o dispositivo. `?apenasMerito=true`
+> restringe às votações em que SIM significa apoio — cerca de 54% do total,
+> contra 2,8% se o recorte fosse só `TEXTO_BASE`.
+>
+> A regra vive em `src/domain/objeto-votacao.ts` e é usada em dois lugares: em
+> TypeScript para exibir, e traduzida para SQL para filtrar. Por isso ela usa
+> **substring** e não regex — `incluir` em JS e `LIKE '%x%'` em SQL têm
+> semântica idêntica sob a collation `utf8mb4_unicode_ci`, enquanto duas
+> implementações de regex divergiriam na primeira manutenção.
+> `npm run verifica:objeto` prova a equivalência contra um MySQL real.
 
 > **Como ler `/parlamentares/:id/temas`.** O endpoint cruza `autoriaProposicao`
 > e `voto` com `temaProposicao`, e três ressalvas viajam no `metadata` porque
