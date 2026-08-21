@@ -1853,12 +1853,18 @@ components:
           enum:
             - ORIENTACAO_INDISPONIVEL_SENADO
             - SEM_VOTOS_COMPARAVEIS
+            - BANCADA_NAO_RESOLVIDA
             - AMOSTRA_INSUFICIENTE
           description: >
             `ORIENTACAO_INDISPONIVEL_SENADO`: o agregador não coleta orientação
             do Senado.
             `SEM_VOTOS_COMPARAVEIS`: nenhuma votação do parlamentar tem
             orientação correspondente.
+            `BANCADA_NAO_RESOLVIDA`: havia orientação publicada, mas a bancada
+            do parlamentar não foi identificada — hoje o caso dos blocos, cujo
+            nome vem abreviado e truncado no dump da Câmara. A limitação é
+            nossa, não do dado; a interface deve dizer isso em vez de sugerir
+            ausência de informação.
             `AMOSTRA_INSUFICIENTE`: há comparações, mas menos que
             `minimoParaTaxa` — poucas para uma percentagem significar algo.
             Nestes dois últimos casos, use `consideradas` para dizer quantas
@@ -1873,6 +1879,13 @@ components:
         liberadas:
           type: integer
           description: Votos com orientação "Liberado"/"Artigo 17", fora do denominador.
+        bancadaNaoResolvida:
+          type: integer
+          description: >
+            Votações com orientação publicada em que nenhuma bancada pôde ser
+            associada ao partido do parlamentar. Federações (`Fdr PT-PCdoB-PV`)
+            são resolvidas por pertencimento; blocos (`Bl UniPpPsd...`) não,
+            porque o nome vem abreviado e truncado.
         minimoParaTaxa:
           type: integer
           description: Piso de `consideradas` para a taxa ser publicada.

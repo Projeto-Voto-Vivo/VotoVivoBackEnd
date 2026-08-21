@@ -25,6 +25,16 @@ describe('AlignmentService', () => {
     { orientacao: 'Sim', voto: 'NAO', total: BigInt(divergiu) },
   ];
 
+  /**
+   * O serviço faz duas consultas em paralelo: a agregação orientação × voto e a
+   * contagem de votações cuja bancada não foi identificada.
+   */
+  const responder = (linhas: unknown[], naoResolvidas = 0) => {
+    prismaMock.$queryRaw
+      .mockResolvedValueOnce(linhas)
+      .mockResolvedValueOnce([{ total: BigInt(naoResolvidas) }]);
+  };
+
   describe('amostra mínima', () => {
     /**
      * O caso que estava no ar: 100% de fidelidade partidária calculado sobre
@@ -33,7 +43,7 @@ describe('AlignmentService', () => {
      */
     it('should not publish a rate built on too few comparisons', async () => {
       deputado();
-      prismaMock.$queryRaw.mockResolvedValue(comparacoes(2, 0));
+      responder(comparacoes(2, 0));
 
       const result = await service.getAlignmentByParliamentarianId(1);
 
@@ -44,7 +54,7 @@ describe('AlignmentService', () => {
     /** Os contadores continuam, para a UI dizer "2 votações comparadas". */
     it('should keep the counters visible when it withholds the rate', async () => {
       deputado();
-      prismaMock.$queryRaw.mockResolvedValue(comparacoes(2, 0));
+      responder(comparacoes(2, 0));
 
       const result = await service.getAlignmentByParliamentarianId(1);
 
@@ -88,7 +98,7 @@ describe('AlignmentService', () => {
      */
     it('should distinguish "nothing to compare" from "too few"', async () => {
       deputado();
-      prismaMock.$queryRaw.mockResolvedValue([]);
+      responder([]);
 
       const result = await service.getAlignmentByParliamentarianId(1);
 
@@ -101,7 +111,7 @@ describe('AlignmentService', () => {
   describe('regras de comparação', () => {
     it('should compute the rate from the aggregated orientation/vote pairs', async () => {
       deputado();
-      prismaMock.$queryRaw.mockResolvedValue(comparacoes(24, 6));
+      responder(comparacoes(24, 6));
 
       const result = await service.getAlignmentByParliamentarianId(1);
 
@@ -122,7 +132,7 @@ describe('AlignmentService', () => {
      */
     it('should keep released votes out of the denominator', async () => {
       deputado();
-      prismaMock.$queryRaw.mockResolvedValue([
+      responder([
         { orientacao: 'Sim', voto: 'SIM', total: BigInt(25) },
         { orientacao: 'Liberado', voto: 'NAO', total: BigInt(5) },
         { orientacao: 'Artigo 17', voto: 'NAO', total: BigInt(2) },
@@ -140,7 +150,7 @@ describe('AlignmentService', () => {
 
     it('should compare accent-insensitively', async () => {
       deputado();
-      prismaMock.$queryRaw.mockResolvedValue([
+      responder([
         { orientacao: 'Não', voto: 'NAO', total: BigInt(20) },
         { orientacao: 'Abstenção', voto: 'ABSTENCAO', total: BigInt(5) },
       ]);
@@ -152,7 +162,7 @@ describe('AlignmentService', () => {
 
     it('should not invent divergence for an unknown orientation', async () => {
       deputado();
-      prismaMock.$queryRaw.mockResolvedValue([
+      responder([
         { orientacao: 'Questão de Ordem', voto: 'SIM', total: BigInt(30) },
       ]);
 
@@ -169,7 +179,7 @@ describe('AlignmentService', () => {
     it('should fall back to partidoAtual and flag it when there is no affiliation history', async () => {
       prismaMock.parliamentarian.findUnique.mockResolvedValue({ role: 'Deputado(a)' });
       prismaMock.partyAffiliation.count.mockResolvedValue(0);
-      prismaMock.$queryRaw.mockResolvedValue(comparacoes(20, 0));
+      responder(comparacoes(20, 0));
 
       const result = await service.getAlignmentByParliamentarianId(1);
 
@@ -196,6 +206,7 @@ describe('AlignmentService', () => {
         divergiu: 0,
         consideradas: 0,
         liberadas: 0,
+        bancadaNaoResolvida: 0,
         minimoParaTaxa: MINIMO_PARA_TAXA,
         fonteFiliacao: null,
       });
@@ -209,7 +220,7 @@ describe('AlignmentService', () => {
       const senador = await service.getAlignmentByParliamentarianId(2);
 
       deputado();
-      prismaMock.$queryRaw.mockResolvedValue(comparacoes(20, 0));
+      responder(comparacoes(20, 0));
       const deputadoResultado = await service.getAlignmentByParliamentarianId(1);
 
       expect(Object.keys(senador).sort()).toEqual(
@@ -217,4 +228,94 @@ describe('AlignmentService', () => {
       );
     });
   });
+
+  describe('resolução da bancada', () => {
+    /**
+     * O bug que isto corrige: a comparação era por igualdade exata, e o dump da
+     * Câmara publica a bancada do PT como "Fdr PT-PCdoB-PV". Nenhum deputado de
+     * federação — 19% da Câmara — tinha uma única comparação.
+     */
+    it('should match a party inside a federation bench', async () => {
+      const sql = await capturarRegraDeBancada();
+
+      expect(sql).toContain('FIND_IN_SET');
+      expect(sql).toContain("LIKE 'Fdr %'");
+    });
+
+    /**
+     * `FIND_IN_SET` compara token a token. Um `LIKE '%PP%'` casaria dentro de
+     * "Bl UniPpPsd" — a collation é insensível a caixa — e inventaria
+     * comparações erradas.
+     */
+    it('should not match a party by substring', async () => {
+      const sql = await capturarRegraDeBancada();
+
+      expect(sql).not.toMatch(/LIKE\s+CONCAT/i);
+      expect(sql).toContain("REPLACE(SUBSTRING(o.siglaBancada, 5), '-', ',')");
+    });
+
+    it('should count votings whose bench could not be resolved', async () => {
+      deputado();
+      responder([], 37);
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result.bancadaNaoResolvida).toBe(37);
+    });
+
+    /**
+     * Um deputado de bloco tem orientação publicada, mas a bancada dele vem
+     * abreviada e truncada. Dizer "sem dado" seria empurrar para o dado uma
+     * limitação que é nossa.
+     */
+    it('should distinguish an unresolved bench from missing data', async () => {
+      deputado();
+      responder([], 12);
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result.motivo).toBe('BANCADA_NAO_RESOLVIDA');
+      expect(result.taxa).toBeNull();
+    });
+
+    it('should still report missing data when there is no orientation at all', async () => {
+      deputado();
+      responder([], 0);
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result.motivo).toBe('SEM_VOTOS_COMPARAVEIS');
+    });
+
+    /** Com amostra suficiente, o contador não muda o resultado — só informa. */
+    it('should not let unresolved benches suppress a valid rate', async () => {
+      deputado();
+      responder(comparacoes(20, 0), 9);
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result.taxa).toBe(100);
+      expect(result.motivo).toBeNull();
+      expect(result.bancadaNaoResolvida).toBe(9);
+    });
+  });
+
+  /**
+   * Lê a regra de pertencimento da bancada.
+   *
+   * Ela é um `Prisma.sql` interpolado na consulta, então no array do template
+   * aparece só como `?` — o texto vive no valor interpolado, não nas partes.
+   */
+  async function capturarRegraDeBancada(): Promise<string> {
+    deputado();
+    responder([]);
+    await service.getAlignmentByParliamentarianId(1);
+
+    const [, ...valores] = prismaMock.$queryRaw.mock.calls[0];
+    const fragmento = valores.find(
+      (v: unknown) => typeof (v as { sql?: string })?.sql === 'string',
+    );
+
+    return String((fragmento as { sql: string }).sql);
+  }
 });

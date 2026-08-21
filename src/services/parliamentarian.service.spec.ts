@@ -849,6 +849,7 @@ describe('ParliamentarianService', () => {
       prismaMock.amendment.aggregate.mockResolvedValue({
         _sum: { committedAmount: null, liquidatedAmount: null, paidAmount: null },
       });
+      // O alinhamento faz duas consultas; o resumo de despesas faz outra.
       prismaMock.$queryRaw.mockResolvedValue([]);
     });
 
