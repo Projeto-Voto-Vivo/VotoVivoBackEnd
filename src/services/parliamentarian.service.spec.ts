@@ -903,7 +903,7 @@ describe('ParliamentarianService', () => {
 
       // O agregador so grava orientacao de bancada da Camara. Indisponivel com
       // motivo explicito, nunca 0%.
-      expect(result.votacoes.alinhamento).toEqual({
+      expect(result.votacoes.alinhamento).toMatchObject({
         disponivel: false,
         motivo: 'ORIENTACAO_INDISPONIVEL_SENADO',
         taxa: null,

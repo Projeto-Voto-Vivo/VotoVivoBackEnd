@@ -1,4 +1,4 @@
-import { AlignmentService } from './alignment.service';
+import { AlignmentService, MINIMO_PARA_TAXA } from './alignment.service';
 
 describe('AlignmentService', () => {
   let prismaMock: any;
@@ -19,107 +19,202 @@ describe('AlignmentService', () => {
     prismaMock.partyAffiliation.count.mockResolvedValue(2);
   };
 
-  it('should compute the rate from the aggregated orientation/vote pairs', async () => {
-    deputado();
-    prismaMock.$queryRaw.mockResolvedValue([
-      { orientacao: 'Sim', voto: 'SIM', total: BigInt(8) },
-      { orientacao: 'Sim', voto: 'NAO', total: BigInt(2) },
-    ]);
+  /** Gera N comparações repartidas entre seguir e divergir. */
+  const comparacoes = (seguiu: number, divergiu: number) => [
+    { orientacao: 'Sim', voto: 'SIM', total: BigInt(seguiu) },
+    { orientacao: 'Sim', voto: 'NAO', total: BigInt(divergiu) },
+  ];
 
-    const result = await service.getAlignmentByParliamentarianId(1);
+  describe('amostra mínima', () => {
+    /**
+     * O caso que estava no ar: 100% de fidelidade partidária calculado sobre
+     * duas comparações. É a leitura mais forte possível de um número que não
+     * sustenta nada.
+     */
+    it('should not publish a rate built on too few comparisons', async () => {
+      deputado();
+      prismaMock.$queryRaw.mockResolvedValue(comparacoes(2, 0));
 
-    expect(result).toEqual({
-      disponivel: true,
-      taxa: 80,
-      seguiu: 8,
-      divergiu: 2,
-      consideradas: 10,
-      liberadas: 0,
-      fonteFiliacao: 'historico',
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result.taxa).toBeNull();
+      expect(result.motivo).toBe('AMOSTRA_INSUFICIENTE');
+    });
+
+    /** Os contadores continuam, para a UI dizer "2 votações comparadas". */
+    it('should keep the counters visible when it withholds the rate', async () => {
+      deputado();
+      prismaMock.$queryRaw.mockResolvedValue(comparacoes(2, 0));
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result).toMatchObject({
+        disponivel: true,
+        seguiu: 2,
+        divergiu: 0,
+        consideradas: 2,
+        minimoParaTaxa: MINIMO_PARA_TAXA,
+      });
+    });
+
+    it('should publish the rate once the sample reaches the floor', async () => {
+      deputado();
+      prismaMock.$queryRaw.mockResolvedValue(
+        comparacoes(MINIMO_PARA_TAXA - 5, 5),
+      );
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result.consideradas).toBe(MINIMO_PARA_TAXA);
+      expect(result.taxa).toBe(75);
+      expect(result.motivo).toBeNull();
+    });
+
+    it('should withhold the rate one comparison below the floor', async () => {
+      deputado();
+      prismaMock.$queryRaw.mockResolvedValue(
+        comparacoes(MINIMO_PARA_TAXA - 1, 0),
+      );
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result.consideradas).toBe(MINIMO_PARA_TAXA - 1);
+      expect(result.taxa).toBeNull();
+    });
+
+    /**
+     * Zero é qualitativamente diferente de "poucas": significa que não há
+     * nenhuma votação com orientação correspondente, não que a amostra é curta.
+     */
+    it('should distinguish "nothing to compare" from "too few"', async () => {
+      deputado();
+      prismaMock.$queryRaw.mockResolvedValue([]);
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result.consideradas).toBe(0);
+      expect(result.motivo).toBe('SEM_VOTOS_COMPARAVEIS');
+      expect(result.taxa).toBeNull();
     });
   });
 
-  /**
-   * "Liberado" e "Artigo 17" nao sao orientacao: a bancada liberou o voto.
-   * Conta-los como divergencia inventaria infidelidade partidaria.
-   */
-  it('should keep released votes out of the denominator', async () => {
-    deputado();
-    prismaMock.$queryRaw.mockResolvedValue([
-      { orientacao: 'Sim', voto: 'SIM', total: BigInt(3) },
-      { orientacao: 'Liberado', voto: 'NAO', total: BigInt(5) },
-      { orientacao: 'Artigo 17', voto: 'NAO', total: BigInt(2) },
-    ]);
+  describe('regras de comparação', () => {
+    it('should compute the rate from the aggregated orientation/vote pairs', async () => {
+      deputado();
+      prismaMock.$queryRaw.mockResolvedValue(comparacoes(24, 6));
 
-    const result = await service.getAlignmentByParliamentarianId(1);
+      const result = await service.getAlignmentByParliamentarianId(1);
 
-    expect(result).toMatchObject({
-      taxa: 100,
-      consideradas: 3,
-      liberadas: 7,
-      divergiu: 0,
+      expect(result).toMatchObject({
+        disponivel: true,
+        taxa: 80,
+        seguiu: 24,
+        divergiu: 6,
+        consideradas: 30,
+        liberadas: 0,
+        fonteFiliacao: 'historico',
+      });
+    });
+
+    /**
+     * "Liberado" e "Artigo 17" não são orientação: a bancada liberou o voto.
+     * Contá-los como divergência inventaria infidelidade partidária.
+     */
+    it('should keep released votes out of the denominator', async () => {
+      deputado();
+      prismaMock.$queryRaw.mockResolvedValue([
+        { orientacao: 'Sim', voto: 'SIM', total: BigInt(25) },
+        { orientacao: 'Liberado', voto: 'NAO', total: BigInt(5) },
+        { orientacao: 'Artigo 17', voto: 'NAO', total: BigInt(2) },
+      ]);
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result).toMatchObject({
+        taxa: 100,
+        consideradas: 25,
+        liberadas: 7,
+        divergiu: 0,
+      });
+    });
+
+    it('should compare accent-insensitively', async () => {
+      deputado();
+      prismaMock.$queryRaw.mockResolvedValue([
+        { orientacao: 'Não', voto: 'NAO', total: BigInt(20) },
+        { orientacao: 'Abstenção', voto: 'ABSTENCAO', total: BigInt(5) },
+      ]);
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result).toMatchObject({ seguiu: 25, divergiu: 0, taxa: 100 });
+    });
+
+    it('should not invent divergence for an unknown orientation', async () => {
+      deputado();
+      prismaMock.$queryRaw.mockResolvedValue([
+        { orientacao: 'Questão de Ordem', voto: 'SIM', total: BigInt(30) },
+      ]);
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result).toMatchObject({
+        liberadas: 30,
+        consideradas: 0,
+        taxa: null,
+        motivo: 'SEM_VOTOS_COMPARAVEIS',
+      });
+    });
+
+    it('should fall back to partidoAtual and flag it when there is no affiliation history', async () => {
+      prismaMock.parliamentarian.findUnique.mockResolvedValue({ role: 'Deputado(a)' });
+      prismaMock.partyAffiliation.count.mockResolvedValue(0);
+      prismaMock.$queryRaw.mockResolvedValue(comparacoes(20, 0));
+
+      const result = await service.getAlignmentByParliamentarianId(1);
+
+      expect(result.fonteFiliacao).toBe('partidoAtual');
     });
   });
 
-  it('should compare accent-insensitively', async () => {
-    deputado();
-    prismaMock.$queryRaw.mockResolvedValue([
-      { orientacao: 'Não', voto: 'NAO', total: BigInt(4) },
-      { orientacao: 'Abstenção', voto: 'ABSTENCAO', total: BigInt(1) },
-    ]);
+  describe('Senado', () => {
+    /**
+     * O agregador só grava orientação de bancada da Câmara. Devolver 0% para
+     * senadores seria afirmar infidelidade que não foi medida.
+     */
+    it('should report unavailable instead of 0%', async () => {
+      prismaMock.parliamentarian.findUnique.mockResolvedValue({ role: 'Senador(a)' });
+      prismaMock.partyAffiliation.count.mockResolvedValue(1);
 
-    const result = await service.getAlignmentByParliamentarianId(1);
+      const result = await service.getAlignmentByParliamentarianId(2);
 
-    expect(result).toMatchObject({ seguiu: 5, divergiu: 0, taxa: 100 });
-  });
-
-  it('should not invent divergence for an unknown orientation', async () => {
-    deputado();
-    prismaMock.$queryRaw.mockResolvedValue([
-      { orientacao: 'Questão de Ordem', voto: 'SIM', total: BigInt(3) },
-    ]);
-
-    const result = await service.getAlignmentByParliamentarianId(1);
-
-    expect(result).toMatchObject({ liberadas: 3, consideradas: 0, taxa: null });
-  });
-
-  it('should fall back to partidoAtual and flag it when there is no affiliation history', async () => {
-    prismaMock.parliamentarian.findUnique.mockResolvedValue({ role: 'Deputado(a)' });
-    prismaMock.partyAffiliation.count.mockResolvedValue(0);
-    prismaMock.$queryRaw.mockResolvedValue([
-      { orientacao: 'Sim', voto: 'SIM', total: BigInt(1) },
-    ]);
-
-    const result = await service.getAlignmentByParliamentarianId(1);
-
-    expect(result).toMatchObject({ fonteFiliacao: 'partidoAtual' });
-  });
-
-  /**
-   * O agregador so grava orientacao de bancada da Camara. Devolver 0% para
-   * senadores seria afirmar infidelidade que nao foi medida.
-   */
-  it('should report unavailable for senators instead of 0%', async () => {
-    prismaMock.parliamentarian.findUnique.mockResolvedValue({ role: 'Senador(a)' });
-    prismaMock.partyAffiliation.count.mockResolvedValue(1);
-
-    const result = await service.getAlignmentByParliamentarianId(2);
-
-    expect(result).toEqual({
-      disponivel: false,
-      motivo: 'ORIENTACAO_INDISPONIVEL_SENADO',
-      taxa: null,
+      expect(result).toEqual({
+        disponivel: false,
+        taxa: null,
+        motivo: 'ORIENTACAO_INDISPONIVEL_SENADO',
+        seguiu: 0,
+        divergiu: 0,
+        consideradas: 0,
+        liberadas: 0,
+        minimoParaTaxa: MINIMO_PARA_TAXA,
+        fonteFiliacao: null,
+      });
+      expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
     });
-    expect(prismaMock.$queryRaw).not.toHaveBeenCalled();
-  });
 
-  it('should return a null rate when there is nothing to compare', async () => {
-    deputado();
-    prismaMock.$queryRaw.mockResolvedValue([]);
+    /** Formato uniforme: o cliente lê os mesmos campos nos três casos. */
+    it('should return the same shape as the Camara branch', async () => {
+      prismaMock.parliamentarian.findUnique.mockResolvedValue({ role: 'Senador(a)' });
+      prismaMock.partyAffiliation.count.mockResolvedValue(0);
+      const senador = await service.getAlignmentByParliamentarianId(2);
 
-    const result = await service.getAlignmentByParliamentarianId(1);
+      deputado();
+      prismaMock.$queryRaw.mockResolvedValue(comparacoes(20, 0));
+      const deputadoResultado = await service.getAlignmentByParliamentarianId(1);
 
-    expect(result).toMatchObject({ disponivel: true, taxa: null, consideradas: 0 });
+      expect(Object.keys(senador).sort()).toEqual(
+        Object.keys(deputadoResultado).sort(),
+      );
+    });
   });
 });

@@ -1827,197 +1827,63 @@ components:
       type: object
       description: >
         "Seguiu a orientação do partido?" — comparação entre `orientacaoVotacao`
-        e o voto, usando o partido vigente na DATA da votação. Só existe para a
-        Câmara: o agregador não coleta orientação de bancada do Senado.
+        e o voto, usando o partido vigente na DATA da votação.
+
+
+        O formato é uniforme nos três casos em que não há taxa: os contadores
+        vêm sempre e `taxa` é `null` com `motivo` preenchido. Assim o cliente lê
+        os mesmos campos independentemente do resultado.
       properties:
         disponivel:
           type: boolean
-        motivo:
-          type: string
-          description: Preenchido quando `disponivel` é false.
-          example: ORIENTACAO_INDISPONIVEL_SENADO
+          description: >
+            `false` apenas quando não existe orientação de bancada para a casa —
+            hoje, o Senado. Não confundir com amostra insuficiente, que é
+            `disponivel: true` com `taxa: null`.
         taxa:
           type: number
           format: float
           nullable: true
+          description: >
+            Percentagem de votos que seguiram a orientação. `null` sempre que
+            `motivo` está preenchido — nunca exiba `0` no lugar.
+        motivo:
+          type: string
+          nullable: true
+          enum:
+            - ORIENTACAO_INDISPONIVEL_SENADO
+            - SEM_VOTOS_COMPARAVEIS
+            - AMOSTRA_INSUFICIENTE
+          description: >
+            `ORIENTACAO_INDISPONIVEL_SENADO`: o agregador não coleta orientação
+            do Senado.
+            `SEM_VOTOS_COMPARAVEIS`: nenhuma votação do parlamentar tem
+            orientação correspondente.
+            `AMOSTRA_INSUFICIENTE`: há comparações, mas menos que
+            `minimoParaTaxa` — poucas para uma percentagem significar algo.
+            Nestes dois últimos casos, use `consideradas` para dizer quantas
+            votações foram comparadas em vez de exibir uma taxa.
         seguiu:
           type: integer
         divergiu:
           type: integer
         consideradas:
           type: integer
+          description: '`seguiu + divergiu` — o denominador da taxa.'
         liberadas:
           type: integer
           description: Votos com orientação "Liberado"/"Artigo 17", fora do denominador.
+        minimoParaTaxa:
+          type: integer
+          description: Piso de `consideradas` para a taxa ser publicada.
+          example: 20
         fonteFiliacao:
           type: string
+          nullable: true
           enum: [historico, partidoAtual]
           description: >
             `partidoAtual` indica que não havia histórico de filiação e o partido
             atual foi usado como aproximação.
-
-    PerfilTematico:
-      type: object
-      properties:
-        proposicoes:
-          type: object
-          properties:
-            temas:
-              type: array
-              description: Ordenado por número de proposições, decrescente.
-              items:
-                type: object
-                properties:
-                  tema:
-                    type: string
-                  total:
-                    type: integer
-            totalProposicoes:
-              type: integer
-              description: >
-                Total real de proposições de autoria. **Menor** que a soma da
-                lista por tema, porque uma proposição conta em cada tema seu.
-            semTema:
-              type: integer
-              description: Proposições de autoria sem tema registrado pelo ETL.
-        votacoes:
-          type: object
-          properties:
-            temas:
-              type: array
-              description: Ordenado por votos com posição de mérito (SIM + NÃO).
-              items:
-                type: object
-                properties:
-                  tema:
-                    type: string
-                  votosSim:
-                    type: integer
-                  votosNao:
-                    type: integer
-                  saldo:
-                    type: integer
-                    description: '`votosSim - votosNao`; negativo quando o NÃO prevalece.'
-                  abstencoes:
-                    type: integer
-                  obstrucoes:
-                    type: integer
-                  totalVotos:
-                    type: integer
-            totalVotos:
-              type: integer
-            excluidos:
-              type: object
-              properties:
-                votosSemProposicao:
-                  type: integer
-                  description: Requerimentos e questões de ordem — não classificam por tema.
-                votosEmProposicaoSemTema:
-                  type: integer
-        metadata:
-          type: object
-          properties:
-            limite:
-              type: integer
-            agrupamento:
-              type: string
-            observacao:
-              type: string
-            exclusoes:
-              type: array
-              items:
-                type: string
-
-    OrgaoRef:
-      type: object
-      nullable: true
-      properties:
-        id:
-          type: integer
-        sigla:
-          type: string
-          nullable: true
-        nome:
-          type: string
-          nullable: true
-        tipoOrgao:
-          type: string
-          nullable: true
-        casa:
-          type: string
-          enum: [Camara, Senado, Congresso]
-
-    EtapaTramitacao:
-      type: object
-      properties:
-        id:
-          type: integer
-        sequencia:
-          type: integer
-          nullable: true
-        dataHora:
-          type: string
-          format: date-time
-          nullable: true
-        descricaoTramitacao:
-          type: string
-          nullable: true
-        descricaoSituacao:
-          type: string
-          nullable: true
-        despacho:
-          type: string
-          nullable: true
-        regime:
-          type: string
-          nullable: true
-          description: '`tipoTramitacao.regime` (ex.: Prioridade, Urgência).'
-        tipoTramitacao:
-          type: string
-          nullable: true
-        orgao:
-          $ref: '#/components/schemas/OrgaoRef'
-
-    Placar:
-      type: object
-      description: >
-        Contagem agregada no banco. As sete chaves estão sempre presentes,
-        zeradas quando não houve o voto — chave ausente obrigaria o cliente a
-        tratar `undefined` como zero. Os nomes são os do enum da API
-        (`AUSENCIA_JUSTIFICADA`, `NAO_REGISTRADO`), os mesmos do campo `voto`.
-      properties:
-        SIM:
-          type: integer
-        NAO:
-          type: integer
-        ABSTENCAO:
-          type: integer
-        OBSTRUCAO:
-          type: integer
-        AUSENCIA_JUSTIFICADA:
-          type: integer
-        AUSENTE:
-          type: integer
-        NAO_REGISTRADO:
-          type: integer
-
-    AutorParlamentar:
-      type: object
-      properties:
-        id:
-          type: integer
-        nomeParlamentar:
-          type: string
-        siglaPartido:
-          type: string
-        uf:
-          type: string
-        urlFoto:
-          type: string
-          format: uri
-        cargo:
-          type: string
-          nullable: true
 
     Comissao:
       type: object

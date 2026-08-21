@@ -34,23 +34,37 @@ const ORIENTACAO_PARA_VOTO: Record<string, string> = {
 /** Marcadores que significam "sem orientacao": saem do denominador. */
 const SEM_ORIENTACAO = new Set(['liberado', 'liberacao', 'artigo 17', 'art. 17', '']);
 
+export const MINIMO_PARA_TAXA = 20;
+
 type LinhaAgregada = { orientacao: string | null; voto: string; total: bigint | number };
 
-export type Alinhamento =
-  | {
-      disponivel: false;
-      motivo: string;
-      taxa: null;
-    }
-  | {
-      disponivel: true;
-      taxa: number | null;
-      seguiu: number;
-      divergiu: number;
-      consideradas: number;
-      liberadas: number;
-      fonteFiliacao: 'historico' | 'partidoAtual';
-    };
+export type MotivoSemTaxa =
+  /** O agregador só coleta orientação de bancada da Câmara. */
+  | 'ORIENTACAO_INDISPONIVEL_SENADO'
+  /** Nenhum voto do parlamentar tem orientação correspondente para comparar. */
+  | 'SEM_VOTOS_COMPARAVEIS'
+  /** Há comparações, mas poucas para uma percentagem significar algo. */
+  | 'AMOSTRA_INSUFICIENTE';
+
+/**
+ * Formato uniforme de propósito: os contadores vêm sempre, e `taxa: null` com
+ * `motivo` preenchido cobre os três casos em que a percentagem não deve ser
+ * exibida. Um payload que muda de forma obrigaria o cliente a checar a
+ * existência de cada campo antes de ler.
+ */
+export type Alinhamento = {
+  /** Há orientação de bancada disponível para esta casa legislativa. */
+  disponivel: boolean;
+  taxa: number | null;
+  /** Preenchido sempre que `taxa` é `null`. */
+  motivo: MotivoSemTaxa | null;
+  seguiu: number;
+  divergiu: number;
+  consideradas: number;
+  liberadas: number;
+  minimoParaTaxa: number;
+  fonteFiliacao: 'historico' | 'partidoAtual' | null;
+};
 
 export class AlignmentService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -67,8 +81,14 @@ export class AlignmentService {
     if (normalizar(parliamentarian?.role).startsWith('senador')) {
       return {
         disponivel: false,
-        motivo: 'ORIENTACAO_INDISPONIVEL_SENADO',
         taxa: null,
+        motivo: 'ORIENTACAO_INDISPONIVEL_SENADO',
+        seguiu: 0,
+        divergiu: 0,
+        consideradas: 0,
+        liberadas: 0,
+        minimoParaTaxa: MINIMO_PARA_TAXA,
+        fonteFiliacao: null,
       };
     }
 
@@ -131,14 +151,24 @@ export class AlignmentService {
     }
 
     const consideradas = seguiu + divergiu;
+    const temAmostra = consideradas >= MINIMO_PARA_TAXA;
 
     return {
       disponivel: true,
-      taxa: consideradas === 0 ? null : Number(((seguiu / consideradas) * 100).toFixed(1)),
+      // A taxa só é publicada com amostra suficiente. Os contadores vêm sempre,
+      // para a interface poder mostrar "N votações comparadas" em vez de uma
+      // percentagem que não significa nada.
+      taxa: temAmostra ? Number(((seguiu / consideradas) * 100).toFixed(1)) : null,
+      motivo: temAmostra
+        ? null
+        : consideradas === 0
+          ? 'SEM_VOTOS_COMPARAVEIS'
+          : 'AMOSTRA_INSUFICIENTE',
       seguiu,
       divergiu,
       consideradas,
       liberadas,
+      minimoParaTaxa: MINIMO_PARA_TAXA,
       fonteFiliacao: filiacoes > 0 ? 'historico' : 'partidoAtual',
     };
   }
