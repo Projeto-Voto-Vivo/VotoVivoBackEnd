@@ -21,6 +21,7 @@ describe('ParliamentarianController', () => {
     listCommitteesByParliamentarianId: jest.fn(),
     getThemeProfileByParliamentarianId: jest.fn(),
     getAlignmentByParliamentarianId: jest.fn(),
+    getThemeAlignmentByParliamentarianId: jest.fn(),
   };
 
   beforeEach(() => {
@@ -45,6 +46,10 @@ describe('ParliamentarianController', () => {
     router.get(
       '/parlamentares/:id/temas',
       controller.getThemeProfileByParliamentarianId,
+    );
+    router.get(
+      '/parlamentares/:id/alinhamento/temas',
+      controller.getThemeAlignmentByParliamentarianId,
     );
     router.get(
       '/parlamentares/:id/alinhamento',
@@ -775,7 +780,26 @@ describe('ParliamentarianController', () => {
 
       expect(response.status).toBe(200);
       expect(response.body).toEqual(payload);
-      expect(serviceMock.getAlignmentByParliamentarianId).toHaveBeenCalledWith(1);
+      expect(serviceMock.getAlignmentByParliamentarianId).toHaveBeenCalledWith(1, {
+        objeto: undefined,
+        apenasMerito: false,
+      });
+    });
+
+    /**
+     * O recorte tambem vale aqui: sem ele, a taxa geral seria apurada sobre uma
+     * populacao diferente da de `/alinhamento/temas?apenasMerito=true`, e os
+     * dois numeros nao poderiam ser comparados.
+     */
+    it('should forward the object filter', async () => {
+      serviceMock.getAlignmentByParliamentarianId.mockResolvedValue({});
+
+      await request(app).get('/parlamentares/1/alinhamento?apenasMerito=true');
+
+      expect(serviceMock.getAlignmentByParliamentarianId).toHaveBeenCalledWith(1, {
+        objeto: undefined,
+        apenasMerito: true,
+      });
     });
 
     it('should return 400 when id is invalid', async () => {
@@ -795,6 +819,77 @@ describe('ParliamentarianController', () => {
       );
 
       const response = await request(app).get('/parlamentares/999/alinhamento');
+
+      expect(response.status).toBe(404);
+    });
+  });
+
+  describe('GET /parlamentares/:id/alinhamento/temas', () => {
+    beforeEach(() => {
+      serviceMock.getThemeAlignmentByParliamentarianId.mockResolvedValue({
+        disponivel: true,
+        geral: { taxa: 87.5, consideradas: 40 },
+        temas: [{ tema: 'Meio Ambiente', taxa: 30, consideradas: 20 }],
+        excluidos: { votosSemProposicao: 12, votosEmProposicaoSemTema: 3 },
+        metadata: { limite: 10 },
+      });
+    });
+
+    it('should return 200 with the themes and the overall rate', async () => {
+      const response = await request(app).get('/parlamentares/1/alinhamento/temas');
+
+      expect(response.status).toBe(200);
+      expect(response.body.temas[0].tema).toBe('Meio Ambiente');
+      expect(response.body.geral.taxa).toBe(87.5);
+    });
+
+    /**
+     * A rota mais especifica tem de ganhar de `/parlamentares/:id/alinhamento`
+     * — se `:id` capturasse "1" e o resto fosse ignorado, o cliente receberia o
+     * alinhamento geral achando que pediu o por tema.
+     */
+    it('should not fall through to the plain alignment route', async () => {
+      await request(app).get('/parlamentares/1/alinhamento/temas');
+
+      expect(serviceMock.getThemeAlignmentByParliamentarianId).toHaveBeenCalled();
+      expect(serviceMock.getAlignmentByParliamentarianId).not.toHaveBeenCalled();
+    });
+
+    it('should forward limite and the object filter', async () => {
+      await request(app).get(
+        '/parlamentares/1/alinhamento/temas?limite=5&apenasMerito=true&objeto=texto_base',
+      );
+
+      expect(serviceMock.getThemeAlignmentByParliamentarianId).toHaveBeenCalledWith(
+        1,
+        5,
+        { objeto: 'TEXTO_BASE', apenasMerito: true },
+      );
+    });
+
+    it('should return 400 when id is invalid', async () => {
+      const response = await request(app).get('/parlamentares/abc/alinhamento/temas');
+
+      expect(response.status).toBe(400);
+      expect(serviceMock.getThemeAlignmentByParliamentarianId).not.toHaveBeenCalled();
+    });
+
+    /** Filtro descartado em silencio devolveria a lista inteira parecendo recortada. */
+    it('should return 400 for an object outside the domain', async () => {
+      const response = await request(app).get(
+        '/parlamentares/1/alinhamento/temas?objeto=QUALQUER',
+      );
+
+      expect(response.status).toBe(400);
+      expect(serviceMock.getThemeAlignmentByParliamentarianId).not.toHaveBeenCalled();
+    });
+
+    it('should return 404 when parliamentarian is not found', async () => {
+      serviceMock.getThemeAlignmentByParliamentarianId.mockRejectedValue(
+        new NotFoundError('Parlamentar não encontrado.'),
+      );
+
+      const response = await request(app).get('/parlamentares/999/alinhamento/temas');
 
       expect(response.status).toBe(404);
     });

@@ -13,6 +13,7 @@ import { cargoDaCasa } from '../lib/casas';
 import { classificarObjeto, ehMerito } from '../domain/objeto-votacao';
 import { AlignmentService } from './alignment.service';
 import { FiltroObjeto, ThemeProfileService } from './theme-profile.service';
+import { ThemeAlignmentService } from './theme-alignment.service';
 import {
   buildMeta,
   Pagination,
@@ -62,10 +63,12 @@ type PaginatedFilters = {
 export class ParliamentarianService {
   private readonly alignmentService: AlignmentService;
   private readonly themeProfileService: ThemeProfileService;
+  private readonly themeAlignmentService: ThemeAlignmentService;
 
   constructor(private readonly prisma: PrismaClient) {
     this.alignmentService = new AlignmentService(prisma);
     this.themeProfileService = new ThemeProfileService(prisma);
+    this.themeAlignmentService = new ThemeAlignmentService(prisma);
   }
 
   async listParliamentarians(filters: ListParliamentariansFilters) {
@@ -258,10 +261,37 @@ export class ParliamentarianService {
    * checagem um id inexistente devolveria um payload valido e vazio, que a
    * interface leria como "parlamentar sem comparacoes".
    */
-  async getAlignmentByParliamentarianId(parliamentarianId: number) {
+  async getAlignmentByParliamentarianId(
+    parliamentarianId: number,
+    filtros: FiltroObjeto = {},
+  ) {
     await this.ensureParliamentarianExists(parliamentarianId);
 
-    return this.alignmentService.getAlignmentByParliamentarianId(parliamentarianId);
+    return this.alignmentService.getAlignmentByParliamentarianId(
+      parliamentarianId,
+      filtros,
+    );
+  }
+
+  /**
+   * Fidelidade partidaria aberta por tema da proposicao votada.
+   *
+   * Mesmo motivo de 404 daqui que em `getAlignmentByParliamentarianId`: sem a
+   * checagem, um id inexistente devolveria lista vazia — indistinguivel de um
+   * parlamentar que nunca divergiu.
+   */
+  async getThemeAlignmentByParliamentarianId(
+    parliamentarianId: number,
+    limite?: number,
+    filtros: FiltroObjeto = {},
+  ) {
+    await this.ensureParliamentarianExists(parliamentarianId);
+
+    return this.themeAlignmentService.getThemeAlignment(
+      parliamentarianId,
+      limite,
+      filtros,
+    );
   }
 
   async listExpensesByParliamentarianId(

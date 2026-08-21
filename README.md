@@ -131,17 +131,20 @@ Duas coisas que interagem com o cache e é fácil esquecer:
 
 ### Verificações que exigem banco
 
-Duas regras vivem em SQL e não são alcançáveis por teste unitário — `LIKE`, a
-collation insensível a acento e `FIND_IN_SET` não existem num mock. Cada uma
-tem um script que sobe um MySQL descartável e prova o comportamento:
+Algumas regras vivem em SQL e não são alcançáveis por teste unitário: `LIKE`, a
+collation insensível a acento e uma subquery correlacionada dentro de um `JOIN`
+não existem num mock — com `$queryRaw` mockado, um `GROUP BY` que conta errado
+passa verde. Cada uma tem um script que sobe um MySQL descartável e prova o
+comportamento contra o banco:
 
 ```bash
-npm run verifica:objeto     # classificação do objeto da votação: TS == SQL
-npm run verifica:bancada    # federação resolve, bloco é declarado
-npm run schema:check        # schema.prisma == schema.sql do agregador
+npm run verifica:objeto             # classificação do objeto da votação: TS == SQL
+npm run verifica:bancada            # partido, bloco e federação; uma orientação por votação
+npm run verifica:alinhamento-tema   # os temas fecham com o total, e a diferença é declarada
+npm run schema:check                # schema.prisma == schema.sql do agregador
 ```
 
-Os três exigem Docker e o `VotoVivoDataAggregator` clonado ao lado deste repo.
+Todos exigem Docker e o `VotoVivoDataAggregator` clonado ao lado deste repo.
 
 ### Índices do banco
 
@@ -210,6 +213,7 @@ A documentação interativa está disponível via Swagger UI após iniciar o ser
 | `GET` | `/parlamentares/:id/comissoes` | Órgãos colegiados de que o parlamentar participa (`membroOrgao`) |
 | `GET` | `/parlamentares/:id/temas` | Perfil temático, com recorte opcional por objeto (`apenasMerito`, `objeto`) |
 | `GET` | `/parlamentares/:id/alinhamento` | Fidelidade partidária isolada, sem pagar o perfil inteiro |
+| `GET` | `/parlamentares/:id/alinhamento/temas` | A mesma taxa aberta por tema — onde a divergência está, não só quanta |
 | `GET` | `/parlamentares/:id/emendas` | Emendas vinculadas, paginadas, com `metodoVinculo` e `confiancaVinculo` |
 | `GET` | `/parlamentares/:id/emendas/resumo` | Totais agregados de emendas (empenhado, liquidado, pago) |
 

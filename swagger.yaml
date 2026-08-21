@@ -502,6 +502,33 @@ paths:
           required: true
           schema:
             type: integer
+        - in: query
+          name: apenasMerito
+          schema:
+            type: boolean
+            default: false
+          description: >
+            Restringe às votações em que SIM significa apoio ao que se votou.
+            Aceito aqui para que a taxa possa ser lida sob o mesmo recorte de
+            `/parlamentares/{id}/alinhamento/temas` — sem isso, o total incluiria
+            requerimento de urgência e não seria comparável com a taxa de cada
+            tema. Só `true` liga o filtro.
+        - in: query
+          name: objeto
+          schema:
+            type: string
+            enum:
+            - TEXTO_BASE
+            - PARECER
+            - EMENDA
+            - DESTAQUE
+            - REQUERIMENTO
+            - REDACAO_FINAL
+            - ENCAMINHAMENTO
+            - INDEFINIDO
+          description: >
+            Restringe a uma categoria de objeto votado. Valor fora do domínio
+            devolve 400 em vez de ser ignorado.
       responses:
         '200':
           description: Sucesso
@@ -509,6 +536,87 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Alinhamento'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          $ref: '#/components/responses/NaoEncontrado'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /parlamentares/{id}/alinhamento/temas:
+    get:
+      summary: Fidelidade partidária por tema
+      description: >
+        Onde a divergência está. A taxa geral responde "87%" e para por aí; esta
+        rota abre a mesma comparação por tema da proposição votada, para a
+        interface poder dizer "acompanha o partido em tudo, menos em meio
+        ambiente".
+
+
+        Usa exatamente as regras de `/parlamentares/{id}/alinhamento` —
+        resolução da bancada, partido vigente na DATA da votação, "Liberado" e
+        "Artigo 17" fora do denominador. O bloco `geral` vem junto, com a taxa
+        do total, para o contraste não custar uma segunda requisição.
+
+
+        Três coisas a ler antes de exibir. A **soma dos temas não é o total**:
+        uma proposição pode ter vários temas e o voto conta em cada um. Votos em
+        votações sem proposição ou em proposição sem tema ficam fora, em
+        `excluidos`. E o piso de comparações por tema (`minimoParaTaxa`) é menor
+        que o do total — abaixo dele `taxa` vem `null` com
+        `motivo: AMOSTRA_INSUFICIENTE`, e o certo é mostrar `consideradas` em
+        vez de arredondar uma percentagem que uma divergência move em dez
+        pontos.
+      tags:
+        - Parlamentares
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 10
+          description: >
+            Temas retornados. A lista é ordenada por `consideradas` decrescente
+            — o corte tira os temas com menos evidência, não os de menor taxa.
+        - in: query
+          name: apenasMerito
+          schema:
+            type: boolean
+            default: false
+          description: >
+            Restringe às votações em que SIM significa apoio ao que se votou
+            (`TEXTO_BASE`, `PARECER`, `EMENDA`, `DESTAQUE`). Só `true` liga o
+            filtro.
+        - in: query
+          name: objeto
+          schema:
+            type: string
+            enum:
+            - TEXTO_BASE
+            - PARECER
+            - EMENDA
+            - DESTAQUE
+            - REQUERIMENTO
+            - REDACAO_FINAL
+            - ENCAMINHAMENTO
+            - INDEFINIDO
+          description: >
+            Restringe a uma categoria de objeto votado. Valor fora do domínio
+            devolve 400 em vez de ser ignorado.
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AlinhamentoPorTema'
         '400':
           $ref: '#/components/responses/ParametroInvalido'
         '404':
@@ -1971,6 +2079,141 @@ components:
           description: >
             `partidoAtual` indica que não havia histórico de filiação e o partido
             atual foi usado como aproximação.
+
+    AlinhamentoDoTema:
+      type: object
+      description: >
+        A mesma comparação de `Alinhamento`, restrita às votações de
+        proposições de um tema.
+      properties:
+        tema:
+          type: string
+          example: Meio Ambiente e Desenvolvimento Sustentável
+        taxa:
+          type: number
+          format: float
+          nullable: true
+          description: >
+            `null` sempre que `motivo` está preenchido — nunca exiba `0` no
+            lugar.
+        motivo:
+          type: string
+          nullable: true
+          enum:
+            - SEM_VOTOS_COMPARAVEIS
+            - BANCADA_NAO_RESOLVIDA
+            - AMOSTRA_INSUFICIENTE
+          description: >
+            Mesmos valores de `Alinhamento.motivo`, menos
+            `ORIENTACAO_INDISPONIVEL_SENADO`: sem orientação não há lista de
+            temas, e o motivo aparece uma vez só, em `geral`.
+        seguiu:
+          type: integer
+        divergiu:
+          type: integer
+        consideradas:
+          type: integer
+          description: >
+            `seguiu + divergiu` — o denominador da taxa deste tema, e o critério
+            de ordenação da lista.
+        liberadas:
+          type: integer
+          description: Votos com orientação "Liberado"/"Artigo 17", fora do denominador.
+        bancadaNaoResolvida:
+          type: integer
+          description: >
+            Votos do tema com orientação publicada em que nenhuma bancada
+            representava o partido do parlamentar. Um tema pode aparecer só por
+            isto, com `consideradas: 0` — é resposta, não ausência de dado.
+        minimoParaTaxa:
+          type: integer
+          example: 10
+
+    AlinhamentoPorTema:
+      type: object
+      properties:
+        disponivel:
+          type: boolean
+          description: >
+            Espelha `geral.disponivel`. `false` para senadores, e aí `temas` vem
+            vazio porque não há orientação de bancada coletada — não porque ele
+            nunca divergiu.
+        geral:
+          allOf:
+            - $ref: '#/components/schemas/Alinhamento'
+          description: >
+            A taxa do total, para contrastar com a de cada tema sem uma segunda
+            requisição. Responde ao MESMO recorte de `objeto`/`apenasMerito` que
+            a lista: um total apurado sobre outra população não seria comparável
+            com as partes, e o contraste — que é a razão de o bloco vir junto —
+            passaria a enganar.
+        temas:
+          type: array
+          description: >
+            Ordenada por `consideradas` decrescente: o topo é onde há mais
+            evidência, não onde a fidelidade é maior.
+          items:
+            $ref: '#/components/schemas/AlinhamentoDoTema'
+        excluidos:
+          type: object
+          description: >
+            Votos comparáveis que nenhum tema classifica. Declarados porque, sem
+            eles, a diferença entre a soma dos temas e `geral` não teria
+            explicação visível.
+          properties:
+            votosSemProposicao:
+              type: integer
+            votosEmProposicaoSemTema:
+              type: integer
+        metadata:
+          type: object
+          properties:
+            limite:
+              type: integer
+            temasComparados:
+              type: integer
+              description: >
+                Total de temas antes do corte por `limite`. Se for maior que o
+                tamanho de `temas`, a lista está truncada.
+            minimoParaTaxa:
+              type: integer
+              example: 10
+            minimoParaTaxaGeral:
+              type: integer
+              example: 20
+              description: >
+                Vem junto porque os dois pisos são diferentes de propósito: o
+                tema é um recorte do mesmo conjunto de votos, e exigir o piso do
+                total esconderia quase todos os temas.
+            filtroAplicadoAoGeral:
+              type: boolean
+              description: >
+                Sempre `true`. Existe explícito para o cliente não precisar
+                supor que `geral` e `temas` foram apurados sob o mesmo recorte.
+            ordenacao:
+              type: string
+              example: consideradas DESC, tema ASC
+            agrupamento:
+              type: string
+              example: tema.descricao
+            filtro:
+              type: object
+              properties:
+                objeto:
+                  type: string
+                  nullable: true
+                apenasMerito:
+                  type: boolean
+                objetosDeMerito:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/ObjetoVotacao'
+            observacao:
+              type: string
+            exclusoes:
+              type: array
+              items:
+                type: string
 
     ObjetoVotacao:
       type: string

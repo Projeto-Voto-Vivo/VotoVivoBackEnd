@@ -213,7 +213,10 @@ export class ParliamentarianController {
     try {
       const id = parsePositiveInt(req.params.id, 'id');
       const result =
-        await this.parliamentarianService.getAlignmentByParliamentarianId(id);
+        await this.parliamentarianService.getAlignmentByParliamentarianId(id, {
+          objeto: parseObjeto(req.query.objeto),
+          apenasMerito: req.query.apenasMerito === 'true',
+        });
 
       res.status(200).json(result);
     } catch (error) {
@@ -235,6 +238,34 @@ export class ParliamentarianController {
 
       const result =
         await this.parliamentarianService.getThemeProfileByParliamentarianId(
+          id,
+          limite,
+          {
+            objeto: parseObjeto(req.query.objeto),
+            apenasMerito: req.query.apenasMerito === 'true',
+          },
+        );
+
+      res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  getThemeAlignmentByParliamentarianId = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ) => {
+    try {
+      const id = parsePositiveInt(req.params.id, 'id');
+      const limite =
+        req.query.limite === undefined || req.query.limite === ''
+          ? undefined
+          : parsePositiveInt(req.query.limite, 'limite');
+
+      const result =
+        await this.parliamentarianService.getThemeAlignmentByParliamentarianId(
           id,
           limite,
           {

@@ -1,8 +1,7 @@
 import { Prisma, PrismaClient } from '@prisma/client';
 import {
-  filtroMeritoSql,
-  filtroObjetoSql,
-  ObjetoVotacao,
+  condicaoDoFiltro,
+  FiltroObjeto,
   OBJETOS_DE_MERITO,
 } from '../domain/objeto-votacao';
 import { toNumber } from '../lib/metricas';
@@ -46,40 +45,9 @@ type LinhaVoto = {
 
 type Contagem = { total: bigint | number };
 
-export type FiltroObjeto = {
-  /** Restringe a uma categoria de objeto votado. */
-  objeto?: ObjetoVotacao;
-  /**
-   * Restringe aos votos de mérito — onde SIM significa apoio ao que se votou.
-   * É o recorte que torna "os temas em que mais vota a favor" defensável.
-   */
-  apenasMerito?: boolean;
-};
-
 const COLUNA_RESUMO = Prisma.sql`va.resumoMateria`;
 
-/**
- * Condição SQL do recorte pedido, ou vazio quando não há recorte.
- *
- * Vive aqui e não espalhada pelas consultas para que a lista por tema, o total
- * e os contadores de exclusão usem exatamente o mesmo filtro — se divergirem,
- * os números do payload deixam de fechar entre si.
- */
-function condicaoDoFiltro(filtros: FiltroObjeto): Prisma.Sql {
-  const partes: Prisma.Sql[] = [];
-
-  if (filtros.objeto) {
-    partes.push(filtroObjetoSql(COLUNA_RESUMO, filtros.objeto));
-  }
-
-  if (filtros.apenasMerito) {
-    partes.push(filtroMeritoSql(COLUNA_RESUMO));
-  }
-
-  return partes.length
-    ? Prisma.sql` AND ${Prisma.join(partes, ' AND ')}`
-    : Prisma.empty;
-}
+export type { FiltroObjeto };
 
 export class ThemeProfileService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -90,7 +58,7 @@ export class ThemeProfileService {
     filtros: FiltroObjeto = {},
   ) {
     const limit = Prisma.raw(String(Math.max(1, Math.trunc(limite))));
-    const filtro = condicaoDoFiltro(filtros);
+    const filtro = condicaoDoFiltro(filtros, COLUNA_RESUMO);
 
     const [autoria, votos, totais] = await Promise.all([
       // A autoria não é filtrada por objeto: quem propôs uma matéria a propôs,

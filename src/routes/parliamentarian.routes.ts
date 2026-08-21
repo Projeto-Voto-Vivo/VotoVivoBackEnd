@@ -30,6 +30,13 @@ parliamentarianRouter.get(
   parliamentarianController.listAmendmentsByParliamentarianId,
 );
 
+// Antes de `/alinhamento` nao importa (os caminhos sao distintos), mas ambas
+// precisam vir antes de `/parlamentares/:id`.
+parliamentarianRouter.get(
+  '/parlamentares/:id/alinhamento/temas',
+  parliamentarianController.getThemeAlignmentByParliamentarianId,
+);
+
 parliamentarianRouter.get(
   '/parlamentares/:id/alinhamento',
   parliamentarianController.getAlignmentByParliamentarianId,

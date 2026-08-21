@@ -177,3 +177,43 @@ export function filtroMeritoSql(coluna: Prisma.Sql): Prisma.Sql {
     ' OR ',
   )})`;
 }
+
+/** Recorte por objeto votado, aceito pelos endpoints que contam votos. */
+export type FiltroObjeto = {
+  /** Restringe a uma categoria de objeto votado. */
+  objeto?: ObjetoVotacao;
+  /**
+   * Restringe aos votos de merito — onde SIM significa apoio ao que se votou.
+   * E o recorte que torna "os temas em que mais vota a favor" defensavel.
+   */
+  apenasMerito?: boolean;
+};
+
+/**
+ * Condicao SQL do recorte pedido, ou vazio quando nao ha recorte.
+ *
+ * Vive aqui, e nao espalhada pelas consultas, para que a lista por tema, os
+ * totais e os contadores de exclusao usem exatamente o mesmo filtro — se
+ * divergirem, os numeros do payload deixam de fechar entre si.
+ *
+ * `coluna` e passada pelo chamador porque o alias da tabela `votacao` muda
+ * entre as consultas.
+ */
+export function condicaoDoFiltro(
+  filtros: FiltroObjeto,
+  coluna: Prisma.Sql,
+): Prisma.Sql {
+  const partes: Prisma.Sql[] = [];
+
+  if (filtros.objeto) {
+    partes.push(filtroObjetoSql(coluna, filtros.objeto));
+  }
+
+  if (filtros.apenasMerito) {
+    partes.push(filtroMeritoSql(coluna));
+  }
+
+  return partes.length
+    ? Prisma.sql` AND ${Prisma.join(partes, ' AND ')}`
+    : Prisma.empty;
+}

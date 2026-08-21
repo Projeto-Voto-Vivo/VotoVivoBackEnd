@@ -242,9 +242,23 @@ describe('AlignmentService', () => {
     it('should read the resolution the ETL wrote, not the bench name', async () => {
       const sql = await capturarRegraDeBancada();
 
-      expect(sql).toContain('o.siglaPartido');
-      expect(sql).toContain('o.idBloco');
+      expect(sql).toContain('siglaPartido');
+      expect(sql).toContain('idBloco');
       expect(sql).toContain('blocoPartido');
+    });
+
+    /**
+     * Nada impede o PT orientar sob a propria sigla e a federacao
+     * "Fdr PT-PCdoB-PV" orientar a mesma votacao — a chave unica e
+     * `(idVotacao, siglaBancada)`. Com um JOIN aberto, o voto entraria duas
+     * vezes; se as duas orientacoes divergissem, ele apareceria seguindo e
+     * divergindo ao mesmo tempo.
+     */
+    it('should pick a single orientation per voting, party first', async () => {
+      const sql = await capturarRegraDeBancada();
+
+      expect(sql).toContain('LIMIT 1');
+      expect(sql).toContain('ORDER BY (o2.siglaPartido IS NOT NULL) DESC');
     });
 
     /** Nada de inferir composição a partir de letras soltas do nome. */

@@ -20,7 +20,8 @@
     "prisma:studio": "prisma studio",
     "schema:check": "bash scripts/schema-check.sh",
     "verifica:objeto": "bash scripts/verifica-objeto-votacao.sh",
-    "verifica:bancada": "bash scripts/verifica-bancada.sh"
+    "verifica:bancada": "bash scripts/verifica-bancada.sh",
+    "verifica:alinhamento-tema": "bash scripts/verifica-alinhamento-tema.sh"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.8.0",

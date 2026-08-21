@@ -24,7 +24,15 @@ import { AlignmentService } from '../src/services/alignment.service';
 const adapter = new PrismaMariaDb(process.env.DATABASE_URL!);
 const prisma = new PrismaClient({ adapter });
 
-/** As tres formas em que a Camara publica uma bancada, com um caso de cada. */
+/** Mesmo valor de VOTACOES; declarado antes para a tabela de casos usar. */
+const VOTACOES_ESPERADAS = 25;
+
+/**
+ * Um caso por forma de a Camara publicar uma bancada.
+ *
+ * `seguiu` so aparece onde a orientacao ESCOLHIDA importa: em todos os casos a
+ * pessoa vota SIM, entao seguiu = quantas vezes a bancada dela orientou "Sim".
+ */
 const CASOS = [
   { partido: 'PL', resolve: true, nota: 'bancada de partido' },
   { partido: 'PT', resolve: true, nota: 'federacao' },
@@ -32,9 +40,14 @@ const CASOS = [
   { partido: 'PSOL', resolve: true, nota: 'outra federacao' },
   { partido: 'PP', resolve: true, nota: 'bloco — antes NAO resolvia' },
   { partido: 'MDB', resolve: false, nota: 'fora de bloco e sem bancada propria' },
+  // O PV esta na federacao do PT (que orienta "Nao") E tem bancada propria
+  // (que orienta "Sim"). Duas bancadas representam o partido dele na MESMA
+  // votacao. Sem escolher uma, o voto entra duas vezes e ele aparece seguindo
+  // e divergindo ao mesmo tempo.
+  { partido: 'PV', resolve: true, seguiu: VOTACOES_ESPERADAS, nota: 'partido + federacao: conta uma vez, partido ganha' },
 ];
 
-const VOTACOES = 25; // acima de MINIMO_PARA_TAXA, para a taxa ser publicada
+const VOTACOES = VOTACOES_ESPERADAS; // acima de MINIMO_PARA_TAXA, para a taxa sair
 
 async function main() {
   await prisma.vote.deleteMany();
@@ -96,6 +109,8 @@ async function main() {
             { bench: 'Fdr PT-PCdoB-PV', orientation: 'Nao', blocId: blocos.federacaoPt },
             { bench: 'Fdr PSOL-REDE', orientation: 'Nao', blocId: blocos.federacaoPsol },
             { bench: 'Bl UniPpPsd...', orientation: 'Sim', blocId: blocos.bloco },
+            // Bancada propria de um partido que TAMBEM esta numa federacao.
+            { bench: 'PV', orientation: 'Sim', party: 'PV' },
             // Bancada transversal: nao representa partido nenhum.
             { bench: 'Governo', orientation: 'Sim' },
           ],
@@ -127,9 +142,12 @@ async function main() {
   for (const caso of CASOS) {
     const r = await service.getAlignmentByParliamentarianId(ids[caso.partido]);
 
+    // `=== VOTACOES` e nao `> 0`: se duas bancadas representassem o partido e
+    // as duas entrassem, dariam 50 comparacoes para 25 votacoes.
     const resolveu = r.consideradas === VOTACOES;
     const naoResolveu = r.consideradas === 0 && r.bancadaNaoResolvida === VOTACOES;
-    const ok = caso.resolve ? resolveu : naoResolveu;
+    const seguiuOk = caso.seguiu === undefined || r.seguiu === caso.seguiu;
+    const ok = (caso.resolve ? resolveu : naoResolveu) && seguiuOk;
     if (!ok) falhas += 1;
 
     console.log(
@@ -143,7 +161,7 @@ async function main() {
 
   console.log(
     falhas === 0
-      ? '\nOK: partido, federacao e BLOCO resolvem; transversal fica declarada.'
+      ? '\nOK: partido, federacao e bloco resolvem; uma orientacao por votacao; transversal declarada.'
       : `\nFALHA: ${falhas} caso(s) fora do esperado.`,
   );
   process.exitCode = falhas === 0 ? 0 : 1;
