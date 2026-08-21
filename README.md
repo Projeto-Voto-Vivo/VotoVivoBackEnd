@@ -129,6 +129,20 @@ Duas coisas que interagem com o cache e é fácil esquecer:
   segunda varredura da tabela que o `COUNT(*)` faz. Rolagem infinita só precisa
   de `meta.temProximaPagina`, que sai de buscar uma linha a mais.
 
+### Verificações que exigem banco
+
+Duas regras vivem em SQL e não são alcançáveis por teste unitário — `LIKE`, a
+collation insensível a acento e `FIND_IN_SET` não existem num mock. Cada uma
+tem um script que sobe um MySQL descartável e prova o comportamento:
+
+```bash
+npm run verifica:objeto     # classificação do objeto da votação: TS == SQL
+npm run verifica:bancada    # federação resolve, bloco é declarado
+npm run schema:check        # schema.prisma == schema.sql do agregador
+```
+
+Os três exigem Docker e o `VotoVivoDataAggregator` clonado ao lado deste repo.
+
 ### Índices do banco
 
 `scripts/indices-recomendados.sql` traz os índices e chaves estrangeiras que as
