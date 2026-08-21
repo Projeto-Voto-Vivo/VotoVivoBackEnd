@@ -129,7 +129,7 @@ model orgao {
   idOrgao     Int               @id @default(autoincrement())
   idApi       String            @db.VarChar(50)
   sigla       String?           @db.VarChar(50)
-  nome        String?           @db.VarChar(500)
+  nome        String?           @db.VarChar(1000)
   casa        orgao_casa
   tipoOrgao   String?           @db.VarChar(100)
   evento      Event[]
