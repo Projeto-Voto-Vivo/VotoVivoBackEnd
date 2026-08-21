@@ -209,10 +209,54 @@ model VotingOrientation {
   votingId    Int     @map("idVotacao")
   bench       String  @map("siglaBancada") @db.VarChar(100)
   orientation String? @map("orientacao") @db.VarChar(50)
+  // Resolucao da bancada, feita pelo ETL contra a composicao real de
+  // `bloco`/`blocoPartido`: `blocId` para "Bl ..." e "Fdr ...", `party` para
+  // bancada de partido. Ambos NULL em Governo/Maioria/Minoria/Oposicao.
+  //
+  // E o que substitui o parsing do nome da bancada que o backend fazia: a
+  // sigla vem abreviada e truncada ("Bl UniPpPsd..."), e inferir a composicao
+  // dela era chute.
+  blocId      Int?    @map("idBloco")
+  party       String? @map("siglaPartido") @db.VarChar(50)
   voting      Voting  @relation(fields: [votingId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "orientacaoVotacao_ibfk_1")
+  bloc        Bloc?   @relation(fields: [blocId], references: [id], onUpdate: NoAction, map: "orientacaoVotacao_ibfk_2")
 
   @@unique([votingId, bench], map: "unique_orientacao_votacao")
+  @@index([blocId], map: "idBloco")
   @@map("orientacaoVotacao")
+}
+
+model Bloc {
+  id            Int                 @id @default(autoincrement()) @map("idBloco")
+  apiId         String              @map("idApi") @db.VarChar(50)
+  casa          bloco_casa          @default(Camara)
+  name          String?             @map("nome") @db.VarChar(255)
+  legislatureId Int?                @map("idLegislatura")
+  federation    Boolean             @default(false) @map("federacao")
+  parties       BlocParty[]
+  orientations  VotingOrientation[]
+
+  @@unique([apiId, casa], map: "unique_bloco_api")
+  @@map("bloco")
+}
+
+model BlocParty {
+  id           Int     @id @default(autoincrement()) @map("idBlocoPartido")
+  blocId       Int     @map("idBloco")
+  party        String  @map("siglaPartido") @db.VarChar(50)
+  partyApiId   String? @map("idApiPartido") @db.VarChar(50)
+  /// Posicao do partido no nome do bloco; NULL para os que so o endpoint listou.
+  ordem        Int?
+  bloc         Bloc    @relation(fields: [blocId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "blocoPartido_ibfk_1")
+
+  @@unique([blocId, party], map: "unique_bloco_partido")
+  @@map("blocoPartido")
+}
+
+enum bloco_casa {
+  Camara
+  Senado
+  Congresso
 }
 
 model Vote {

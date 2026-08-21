@@ -2,11 +2,14 @@
 # Prova que a regra de pertencimento de bancada funciona no banco.
 #
 # O AlignmentService decide, em SQL, se uma bancada representa o partido do
-# parlamentar. `FIND_IN_SET`, a collation insensivel a acento e a ausencia de
-# falso positivo por substring nao existem num mock.
+# parlamentar, lendo a resolucao que o ETL gravou em orientacaoVotacao
+# (siglaPartido / idBloco) e a composicao em blocoPartido. Nada disso existe
+# num mock: o EXISTS correlacionado so se prova contra um MySQL real.
 #
-# O bug que isto impede de voltar: com igualdade exata, todo deputado de
-# federacao ("Fdr PT-PCdoB-PV") ficava com zero comparacoes — 19% da Camara.
+# O bug que isto impede de voltar: com igualdade exata contra o NOME da
+# bancada, todo deputado de federacao ("Fdr PT-PCdoB-PV") ficava com zero
+# comparacoes — 19% da Camara. Parsear o nome resolvia federacao mas nunca
+# bloco ("Bl UniPpPsd..." vem abreviado e truncado).
 #
 # Uso: bash scripts/verifica-bancada.sh   (exige Docker)
 

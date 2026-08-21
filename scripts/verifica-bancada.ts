@@ -2,16 +2,18 @@
  * Prova que a regra de pertencimento de bancada funciona no banco.
  *
  * O `AlignmentService` decide se uma bancada representa o partido do
- * parlamentar. Isso vive em SQL (`FIND_IN_SET` sobre o nome da bancada), e SQL
- * nao existe num mock: a collation insensivel a acento, o `SUBSTRING` do
- * prefixo e a ausencia de falso positivo por substring so se provam contra um
- * MySQL real.
+ * parlamentar. Isso vive em SQL, e SQL nao existe num mock.
  *
- * O bug que este script existe para nao deixar voltar: a comparacao era por
- * igualdade exata, e o dump da Camara publica a bancada do PT como
- * "Fdr PT-PCdoB-PV". Todo deputado de federacao — 19% da Camara, incluindo a
- * maior bancada do plenario — ficava com ZERO comparacoes, e a fidelidade
- * partidaria dele era silenciosamente impossivel de calcular.
+ * A resolucao vem pronta do ETL, em `orientacaoVotacao.siglaPartido` (bancada
+ * de partido) e `.idBloco` (bloco ou federacao), apurada contra a composicao
+ * real de `blocoPartido`.
+ *
+ * O bug que este script existe para nao deixar voltar: a comparacao ja foi por
+ * igualdade exata contra o NOME da bancada. Como a Camara publica a bancada do
+ * PT como "Fdr PT-PCdoB-PV", todo deputado de federacao — 19% da Camara,
+ * incluindo a maior bancada do plenario — ficava com ZERO comparacoes, em
+ * silencio. A versao seguinte parseava o nome, o que resolvia federacoes mas
+ * nunca blocos ("Bl UniPpPsd..." vem abreviado e truncado).
  *
  * Uso: bash scripts/verifica-bancada.sh   (exige Docker)
  */
@@ -24,11 +26,12 @@ const prisma = new PrismaClient({ adapter });
 
 /** As tres formas em que a Camara publica uma bancada, com um caso de cada. */
 const CASOS = [
-  { partido: 'PL', bancadaEsperada: 'PL', resolve: true, nota: 'sigla simples' },
-  { partido: 'PT', bancadaEsperada: 'Fdr PT-PCdoB-PV', resolve: true, nota: 'federacao, 1o token' },
-  { partido: 'PCdoB', bancadaEsperada: 'Fdr PT-PCdoB-PV', resolve: true, nota: 'federacao, token do meio' },
-  { partido: 'PSOL', bancadaEsperada: 'Fdr PSOL-REDE', resolve: true, nota: 'federacao, outra' },
-  { partido: 'PP', bancadaEsperada: 'Bl UniPpPsd...', resolve: false, nota: 'bloco abreviado — nao resolve' },
+  { partido: 'PL', resolve: true, nota: 'bancada de partido' },
+  { partido: 'PT', resolve: true, nota: 'federacao' },
+  { partido: 'PCdoB', resolve: true, nota: 'federacao, partido do meio' },
+  { partido: 'PSOL', resolve: true, nota: 'outra federacao' },
+  { partido: 'PP', resolve: true, nota: 'bloco — antes NAO resolvia' },
+  { partido: 'MDB', resolve: false, nota: 'fora de bloco e sem bancada propria' },
 ];
 
 const VOTACOES = 25; // acima de MINIMO_PARA_TAXA, para a taxa ser publicada
@@ -39,6 +42,32 @@ async function main() {
   await prisma.voting.deleteMany();
   await prisma.partyAffiliation.deleteMany();
   await prisma.parliamentarian.deleteMany();
+  await prisma.blocParty.deleteMany();
+  await prisma.bloc.deleteMany();
+
+  // Composicao real, como o camara/bloco_camara.py grava.
+  const criarBloco = async (
+    apiId: string,
+    name: string,
+    federation: boolean,
+    partidos: string[],
+  ) => {
+    const criado = await prisma.bloc.create({
+      data: {
+        apiId,
+        name,
+        federation,
+        parties: { create: partidos.map((party, i) => ({ party, ordem: i + 1 })) },
+      },
+    });
+    return criado.id;
+  };
+
+  const blocos = {
+    federacaoPt: await criarBloco('f1', 'Fdr PT-PCdoB-PV', true, ['PT', 'PCdoB', 'PV']),
+    federacaoPsol: await criarBloco('f2', 'Fdr PSOL-REDE', true, ['PSOL', 'REDE']),
+    bloco: await criarBloco('b1', 'Bl UniPpPsd...', false, ['UNIAO', 'PP', 'PSD']),
+  };
 
   const ids: Record<string, number> = {};
   for (const caso of CASOS) {
@@ -59,12 +88,15 @@ async function main() {
         apiId: `v-${i}`,
         casa: 'Camara',
         votingDate: new Date('2026-03-10T15:00:00'),
+        // `bench` continua sendo o nome cru do dump; o que o backend le sao
+        // `party` e `blocId`, resolvidos pelo ETL.
         orientations: {
           create: [
-            { bench: 'PL', orientation: 'Sim' },
-            { bench: 'Fdr PT-PCdoB-PV', orientation: 'Nao' },
-            { bench: 'Fdr PSOL-REDE', orientation: 'Nao' },
-            { bench: 'Bl UniPpPsd...', orientation: 'Sim' },
+            { bench: 'PL', orientation: 'Sim', party: 'PL' },
+            { bench: 'Fdr PT-PCdoB-PV', orientation: 'Nao', blocId: blocos.federacaoPt },
+            { bench: 'Fdr PSOL-REDE', orientation: 'Nao', blocId: blocos.federacaoPsol },
+            { bench: 'Bl UniPpPsd...', orientation: 'Sim', blocId: blocos.bloco },
+            // Bancada transversal: nao representa partido nenhum.
             { bench: 'Governo', orientation: 'Sim' },
           ],
         },
@@ -111,7 +143,7 @@ async function main() {
 
   console.log(
     falhas === 0
-      ? '\nOK: federacoes resolvem, blocos sao declarados, e PP nao casa dentro de "UniPpPsd".'
+      ? '\nOK: partido, federacao e BLOCO resolvem; transversal fica declarada.'
       : `\nFALHA: ${falhas} caso(s) fora do esperado.`,
   );
   process.exitCode = falhas === 0 ? 0 : 1;

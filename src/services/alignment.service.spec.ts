@@ -231,27 +231,29 @@ describe('AlignmentService', () => {
 
   describe('resolução da bancada', () => {
     /**
-     * O bug que isto corrige: a comparação era por igualdade exata, e o dump da
-     * Câmara publica a bancada do PT como "Fdr PT-PCdoB-PV". Nenhum deputado de
-     * federação — 19% da Câmara — tinha uma única comparação.
+     * A resolução vem pronta do ETL: `orientacaoVotacao.siglaPartido` para
+     * bancada de partido e `idBloco` para "Bl ..."/"Fdr ...", ambos apurados
+     * contra a composição real de `blocoPartido`.
+     *
+     * Antes o backend adivinhava isso do NOME da bancada. Funcionava para
+     * federações ("Fdr PT-PCdoB-PV"), mas nunca para blocos: "Bl UniPpPsd..."
+     * vem abreviado e truncado.
      */
-    it('should match a party inside a federation bench', async () => {
+    it('should read the resolution the ETL wrote, not the bench name', async () => {
       const sql = await capturarRegraDeBancada();
 
-      expect(sql).toContain('FIND_IN_SET');
-      expect(sql).toContain("LIKE 'Fdr %'");
+      expect(sql).toContain('o.siglaPartido');
+      expect(sql).toContain('o.idBloco');
+      expect(sql).toContain('blocoPartido');
     });
 
-    /**
-     * `FIND_IN_SET` compara token a token. Um `LIKE '%PP%'` casaria dentro de
-     * "Bl UniPpPsd" — a collation é insensível a caixa — e inventaria
-     * comparações erradas.
-     */
-    it('should not match a party by substring', async () => {
+    /** Nada de inferir composição a partir de letras soltas do nome. */
+    it('should not parse the bench name', async () => {
       const sql = await capturarRegraDeBancada();
 
-      expect(sql).not.toMatch(/LIKE\s+CONCAT/i);
-      expect(sql).toContain("REPLACE(SUBSTRING(o.siglaBancada, 5), '-', ',')");
+      expect(sql).not.toContain('FIND_IN_SET');
+      expect(sql).not.toContain('siglaBancada');
+      expect(sql).not.toMatch(/LIKE/i);
     });
 
     it('should count votings whose bench could not be resolved', async () => {
@@ -264,9 +266,8 @@ describe('AlignmentService', () => {
     });
 
     /**
-     * Um deputado de bloco tem orientação publicada, mas a bancada dele vem
-     * abreviada e truncada. Dizer "sem dado" seria empurrar para o dado uma
-     * limitação que é nossa.
+     * Sobram Governo/Maioria/Minoria/Oposição, que não representam partido
+     * nenhum. Dizer "sem dado" seria empurrar para o dado uma limitação nossa.
      */
     it('should distinguish an unresolved bench from missing data', async () => {
       deputado();

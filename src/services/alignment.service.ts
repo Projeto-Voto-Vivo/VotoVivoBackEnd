@@ -53,34 +53,28 @@ const PARTIDO_NA_DATA = Prisma.sql`COALESCE((
 /**
  * "Esta bancada representa o partido do parlamentar?"
  *
- * Precisa ser PERTENCIMENTO, nao igualdade. O dump da Camara publica bancadas
- * de tres formas:
+ * A resposta vem PRONTA do ETL. `orientacaoVotacao` traz duas colunas
+ * resolvidas contra a composicao real de `bloco`/`blocoPartido`:
  *
- *   PL                 sigla simples          -> igualdade resolve
- *   Fdr PT-PCdoB-PV    federacao              -> o deputado do PT esta AQUI
- *   Bl UniPpPsd...     bloco, abreviado       -> nao da para resolver
+ *   siglaPartido   bancada de partido        -> compara direto
+ *   idBloco        "Bl ..." ou "Fdr ..."     -> o partido esta em blocoPartido
+ *   ambos NULL     Governo/Maioria/Minoria   -> nao representa partido nenhum
  *
- * Com igualdade pura, todo deputado de federacao ficava sem nenhuma comparacao:
- * o PT e a maior bancada do dump e a segunda maior do plenario, e a fidelidade
- * partidaria dele era silenciosamente impossivel de calcular.
- *
- * `FIND_IN_SET` compara token a token depois de trocar '-' por ',' — nunca casa
- * por substring. Sem isso, `PP` casaria dentro de `Bl UniPpPsd` (a collation e
- * insensivel a caixa) e inventaria comparacoes erradas.
- *
- * Blocos continuam de fora, e por isso sao contados em `bancadaNaoResolvida`:
- * o nome vem abreviado e truncado com reticencias, entao inferir a composicao
- * a partir da string seria chute. A saida definitiva e o agregador guardar a
- * composicao real do endpoint /blocos.
+ * Antes o backend tentava adivinhar isso do NOME da bancada, com `FIND_IN_SET`
+ * sobre "Fdr PT-PCdoB-PV". Funcionava para federacoes, mas nunca para blocos:
+ * "Bl UniPpPsd..." vem abreviado E truncado, e inferir a composicao de letras
+ * soltas seria chute. Com a resolucao no ETL, os ~18% de deputados de bloco
+ * deixam de cair em `BANCADA_NAO_RESOLVIDA`.
  */
 const BANCADA_REPRESENTA_O_PARTIDO = Prisma.sql`(
-  o.siglaBancada = ${PARTIDO_NA_DATA}
+  o.siglaPartido = ${PARTIDO_NA_DATA}
   OR (
-    o.siglaBancada LIKE 'Fdr %'
-    AND FIND_IN_SET(
-      ${PARTIDO_NA_DATA},
-      REPLACE(SUBSTRING(o.siglaBancada, 5), '-', ',')
-    ) > 0
+    o.idBloco IS NOT NULL
+    AND EXISTS (
+      SELECT 1 FROM blocoPartido bp
+      WHERE bp.idBloco = o.idBloco
+        AND bp.siglaPartido = ${PARTIDO_NA_DATA}
+    )
   )
 )`;
 
@@ -92,10 +86,12 @@ export type MotivoSemTaxa =
   /** Nenhum voto do parlamentar tem orientação correspondente para comparar. */
   | 'SEM_VOTOS_COMPARAVEIS'
   /**
-   * As votações têm orientação publicada, mas a bancada do parlamentar não foi
-   * identificada — hoje, o caso dos blocos, cujo nome vem abreviado e truncado.
-   * Diferente de `SEM_VOTOS_COMPARAVEIS`: aqui o dado existe e a limitação é
-   * nossa, o que a interface deve dizer em vez de sugerir ausência de dado.
+   * As votações têm orientação publicada, mas nenhuma bancada representava o
+   * partido do parlamentar: ele está fora de bloco e o partido não orientou
+   * por conta própria, restando só as transversais (Governo, Maioria, Minoria,
+   * Oposição). Diferente de `SEM_VOTOS_COMPARAVEIS`, em que não havia
+   * orientação nenhuma — aqui o dado existe e simplesmente não fala do
+   * partido dele, e a interface deve dizer isso.
    */
   | 'BANCADA_NAO_RESOLVIDA'
   /** Há comparações, mas poucas para uma percentagem significar algo. */
@@ -238,8 +234,8 @@ export class AlignmentService {
         : consideradas > 0
           ? 'AMOSTRA_INSUFICIENTE'
           : // Sem nenhuma comparação, a causa importa: se havia orientação
-            // publicada e a bancada não foi identificada, o dado existe e a
-            // limitação é nossa — dizer "sem dado" seria enganoso.
+            // publicada e nenhuma bancada representava o partido dele, o dado
+            // existe — dizer "sem dado" seria enganoso.
             bancadaNaoResolvida > 0
             ? 'BANCADA_NAO_RESOLVIDA'
             : 'SEM_VOTOS_COMPARAVEIS',

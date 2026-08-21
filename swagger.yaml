@@ -1932,11 +1932,12 @@ components:
             do Senado.
             `SEM_VOTOS_COMPARAVEIS`: nenhuma votação do parlamentar tem
             orientação correspondente.
-            `BANCADA_NAO_RESOLVIDA`: havia orientação publicada, mas a bancada
-            do parlamentar não foi identificada — hoje o caso dos blocos, cujo
-            nome vem abreviado e truncado no dump da Câmara. A limitação é
-            nossa, não do dado; a interface deve dizer isso em vez de sugerir
-            ausência de informação.
+            `BANCADA_NAO_RESOLVIDA`: havia orientação publicada, mas nenhuma
+            bancada representava o partido do parlamentar. Acontece quando ele
+            está fora de bloco e o partido não orientou por conta própria —
+            restam só as bancadas transversais (Governo, Maioria, Minoria,
+            Oposição), que não representam partido nenhum. Não é ausência de
+            dado, e a interface deve dizê-lo em vez de sugerir que é.
             `AMOSTRA_INSUFICIENTE`: há comparações, mas menos que
             `minimoParaTaxa` — poucas para uma percentagem significar algo.
             Nestes dois últimos casos, use `consideradas` para dizer quantas
@@ -1955,9 +1956,10 @@ components:
           type: integer
           description: >
             Votações com orientação publicada em que nenhuma bancada pôde ser
-            associada ao partido do parlamentar. Federações (`Fdr PT-PCdoB-PV`)
-            são resolvidas por pertencimento; blocos (`Bl UniPpPsd...`) não,
-            porque o nome vem abreviado e truncado.
+            associada ao partido do parlamentar. Bancada de partido, bloco e
+            federação são todos resolvidos — o agregador grava o vínculo em
+            `orientacaoVotacao` a partir da composição oficial dos blocos, sem
+            inferir nada do nome abreviado da sigla.
         minimoParaTaxa:
           type: integer
           description: Piso de `consideradas` para a taxa ser publicada.
