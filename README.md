@@ -138,9 +138,10 @@ passa verde. Cada uma tem um script que sobe um MySQL descartável e prova o
 comportamento contra o banco:
 
 ```bash
-npm run verifica:objeto             # classificação do objeto da votação: TS == SQL
+npm run verifica:objeto             # objeto da votação: TS == SQL cru == where do Prisma
 npm run verifica:bancada            # partido, bloco e federação; uma orientação por votação
 npm run verifica:alinhamento-tema   # os temas fecham com o total, e a diferença é declarada
+npm run verifica:filtros-votacoes   # filtros recortam no banco; sem proposição sai declarada
 npm run schema:check                # schema.prisma == schema.sql do agregador
 ```
 
@@ -214,6 +215,7 @@ A documentação interativa está disponível via Swagger UI após iniciar o ser
 | `GET` | `/parlamentares/:id/temas` | Perfil temático, com recorte opcional por objeto (`apenasMerito`, `objeto`) |
 | `GET` | `/parlamentares/:id/alinhamento` | Fidelidade partidária isolada, sem pagar o perfil inteiro |
 | `GET` | `/parlamentares/:id/alinhamento/temas` | A mesma taxa aberta por tema — onde a divergência está, não só quanta |
+| `GET` | `/parlamentares/:id/votacoes` | Aceita `proposicao`, `tipo`, `ano`, `tema`, `busca`, `objeto` e `apenasMerito` |
 | `GET` | `/parlamentares/:id/emendas` | Emendas vinculadas, paginadas, com `metodoVinculo` e `confiancaVinculo` |
 | `GET` | `/parlamentares/:id/emendas/resumo` | Totais agregados de emendas (empenhado, liquidado, pago) |
 

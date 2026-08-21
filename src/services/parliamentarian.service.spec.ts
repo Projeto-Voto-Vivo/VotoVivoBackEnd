@@ -644,6 +644,126 @@ describe('ParliamentarianService', () => {
         service.listVotingsByParliamentarianId(999, {}),
       ).rejects.toBeInstanceOf(NotFoundError);
     });
+
+    describe('filtros', () => {
+      /** O `where` que foi ao banco, e nao o resultado ja mockado. */
+      const whereEnviado = () => prismaMock.vote.findMany.mock.calls[0][0].where;
+
+      beforeEach(() => {
+        prismaMock.parliamentarian.findUnique.mockResolvedValue({ id: 1 });
+        prismaMock.vote.findMany.mockResolvedValue([]);
+        prismaMock.vote.count.mockResolvedValue(0);
+      });
+
+      /**
+       * Sem filtro, nada de `voting` no `where`: um `AND: []` vazio faria o
+       * Prisma emitir SQL a mais na rota mais usada do perfil.
+       */
+      it('should not touch the where when nothing was filtered', async () => {
+        await service.listVotingsByParliamentarianId(1, {});
+
+        expect(whereEnviado()).toEqual({ parliamentarianId: 1 });
+      });
+
+      it('should filter by the voted proposition', async () => {
+        await service.listVotingsByParliamentarianId(1, { proposicao: 1000 });
+
+        expect(whereEnviado().voting.AND).toContainEqual({
+          proposition: { is: { id: 1000 } },
+        });
+      });
+
+      it('should uppercase the type sigla', async () => {
+        await service.listVotingsByParliamentarianId(1, { tipo: 'pl' });
+
+        expect(whereEnviado().voting.AND).toContainEqual({
+          proposition: { is: { propositionType: { sigla: 'PL' } } },
+        });
+      });
+
+      it('should filter by theme description, not id', async () => {
+        await service.listVotingsByParliamentarianId(1, { tema: 'Saúde' });
+
+        expect(whereEnviado().voting.AND).toContainEqual({
+          proposition: {
+            is: { temaProposicao: { some: { tema: { descricao: 'Saúde' } } } },
+          },
+        });
+      });
+
+      /**
+       * `busca` e o unico que NAO exige proposicao vinculada: ela tambem casa
+       * no resumo da propria votacao, entao um requerimento pode aparecer por
+       * merito proprio.
+       */
+      it('should search the voting summary as well as the proposition', async () => {
+        await service.listVotingsByParliamentarianId(1, { busca: 'merenda' });
+
+        const condicoes = whereEnviado().voting.AND;
+
+        expect(condicoes).toContainEqual({
+          OR: [
+            { subjectSummary: { contains: 'merenda' } },
+            { proposition: { is: { summary: { contains: 'merenda' } } } },
+          ],
+        });
+        expect(JSON.stringify(condicoes)).not.toContain('propositionType');
+      });
+
+      it('should combine filters instead of overwriting them', async () => {
+        await service.listVotingsByParliamentarianId(1, {
+          tipo: 'PL',
+          ano: 2025,
+          busca: 'merenda',
+          apenasMerito: true,
+        });
+
+        // recorte de merito + proposicao (tipo e ano juntos) + busca
+        expect(whereEnviado().voting.AND).toHaveLength(3);
+        expect(whereEnviado().voting.AND).toContainEqual({
+          proposition: { is: { propositionType: { sigla: 'PL' }, year: 2025 } },
+        });
+      });
+
+      /**
+       * Requerimento e questao de ordem nao tem proposicao e nunca casam com
+       * estes filtros. Some-los em silencio faria a interface sugerir que nao
+       * existem — por isso o numero vai no `meta`.
+       */
+      it('should report how many votings the proposition filter excluded', async () => {
+        prismaMock.vote.count
+          .mockResolvedValueOnce(12) // total do resultado
+          .mockResolvedValueOnce(41); // sem proposicao vinculada
+
+        const result = await service.listVotingsByParliamentarianId(1, { ano: 2025 });
+
+        expect(result.meta.excluidos.votacoesSemProposicao).toBe(41);
+      });
+
+      /** Sem filtro de proposicao elas estao no resultado: nada foi excluido. */
+      it('should not count exclusions when no proposition filter is active', async () => {
+        const result = await service.listVotingsByParliamentarianId(1, {
+          busca: 'merenda',
+        });
+
+        expect(result.meta.excluidos.votacoesSemProposicao).toBe(0);
+        expect(prismaMock.vote.count).toHaveBeenCalledTimes(1);
+      });
+
+      it('should echo the applied filters', async () => {
+        const result = await service.listVotingsByParliamentarianId(1, {
+          tipo: 'PL',
+          objeto: 'TEXTO_BASE',
+        });
+
+        expect(result.filtros).toMatchObject({
+          tipo: 'PL',
+          objeto: 'TEXTO_BASE',
+          ano: null,
+          apenasMerito: false,
+        });
+      });
+    });
   });
 
   describe('getPresenceByParliamentarianId', () => {

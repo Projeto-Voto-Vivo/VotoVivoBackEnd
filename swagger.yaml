@@ -177,7 +177,27 @@ paths:
   /parlamentares/{id}/votacoes:
     get:
       summary: Histórico de votos
-      description: Retorna as votações nominais nas quais o parlamentar participou.
+      description: >
+        As votações nominais em que o parlamentar votou, com os mesmos filtros
+        de `GET /proposicoes` aplicados à **proposição votada**. Sem eles, achar
+        uma matéria específica exigiria folhear centenas de votações.
+
+
+        O recorte acontece no banco, então `meta.total` reflete o filtro e a
+        paginação continua correta.
+
+
+        **Contrato que muda o resultado:** votação sem proposição vinculada —
+        requerimento, questão de ordem — não casa com filtro de proposição
+        nenhum, e **sai** do resultado assim que `proposicao`, `tipo`, `ano` ou
+        `tema` é usado. Quantas saíram vem em `meta.excluidos`, para a ausência
+        não ser lida como inexistência. `busca` é a exceção: ela também olha o
+        resumo da própria votação, então não exige proposição.
+
+
+        Os domínios de `tipo`, `ano` e `tema` saem de `GET /proposicoes/filtros`
+        — que é global, não facetado por parlamentar: dá para escolher um tema
+        em que este parlamentar nunca votou e receber lista vazia.
       tags:
         - Votacoes
       parameters:
@@ -197,6 +217,67 @@ paths:
             type: integer
             default: 20
             maximum: 100
+        - in: query
+          name: proposicao
+          schema:
+            type: integer
+          description: >
+            Id interno da proposição — só as votações daquela matéria. É o caso
+            "quero ver esta proposição" sem folhear até achar.
+        - in: query
+          name: tipo
+          schema:
+            type: string
+            example: PL
+          description: >
+            Sigla do tipo da proposição votada. Caixa é indiferente.
+        - in: query
+          name: ano
+          schema:
+            type: integer
+            example: 2025
+          description: Ano da proposição votada, não da votação.
+        - in: query
+          name: tema
+          schema:
+            type: string
+            example: Saúde
+          description: >
+            Descrição do tema, como em `/proposicoes/filtros`. A comparação é
+            insensível a acento e a caixa (collation `utf8mb4_unicode_ci`).
+        - in: query
+          name: busca
+          schema:
+            type: string
+          description: >
+            Texto na ementa da proposição **ou** no resumo da votação.
+            Insensível a acento e a caixa. É o único filtro que não exige
+            proposição vinculada.
+        - in: query
+          name: apenasMerito
+          schema:
+            type: boolean
+            default: false
+          description: >
+            Restringe às votações em que SIM significa apoio ao que se votou —
+            separa "como votou no texto" de "como votou no requerimento". Só
+            `true` liga o filtro.
+        - in: query
+          name: objeto
+          schema:
+            type: string
+            enum:
+            - TEXTO_BASE
+            - PARECER
+            - EMENDA
+            - DESTAQUE
+            - REQUERIMENTO
+            - REDACAO_FINAL
+            - ENCAMINHAMENTO
+            - INDEFINIDO
+          description: >
+            Restringe a uma categoria de objeto votado. Valor fora do domínio
+            devolve 400 em vez de ser ignorado.
       responses:
         '200':
           description: Sucesso
@@ -210,7 +291,44 @@ paths:
                     items:
                       $ref: '#/components/schemas/VotacaoPerfil'
                   meta:
-                    $ref: '#/components/schemas/PaginationMeta'
+                    allOf:
+                      - $ref: '#/components/schemas/PaginationMeta'
+                      - type: object
+                        properties:
+                          excluidos:
+                            type: object
+                            properties:
+                              votacoesSemProposicao:
+                                type: integer
+                                description: >
+                                  Votações do parlamentar sem proposição
+                                  vinculada que os filtros de proposição
+                                  deixaram de fora. `0` quando nenhum deles está
+                                  ativo — aí elas estão no resultado.
+                  filtros:
+                    type: object
+                    description: Eco do recorte aplicado; `null` no que não veio.
+                    properties:
+                      proposicao:
+                        type: integer
+                        nullable: true
+                      tipo:
+                        type: string
+                        nullable: true
+                      ano:
+                        type: integer
+                        nullable: true
+                      tema:
+                        type: string
+                        nullable: true
+                      busca:
+                        type: string
+                        nullable: true
+                      objeto:
+                        type: string
+                        nullable: true
+                      apenasMerito:
+                        type: boolean
         '400':
           $ref: '#/components/responses/ParametroInvalido'
         '404':

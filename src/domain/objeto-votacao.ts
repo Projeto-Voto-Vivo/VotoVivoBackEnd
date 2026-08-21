@@ -178,6 +178,64 @@ export function filtroMeritoSql(coluna: Prisma.Sql): Prisma.Sql {
   )})`;
 }
 
+/**
+ * A MESMA lista de regras, agora como `where` do Prisma.
+ *
+ * Existe uma terceira traducao porque `GET /parlamentares/:id/votacoes` usa
+ * `findMany`, e paginacao so e correta se o recorte acontecer no banco:
+ * filtrar a pagina ja lida devolveria 20 linhas das quais 8 sobrevivem, e o
+ * `total` do `meta` mentiria.
+ *
+ * Gerada a partir de `REGRAS`, como a versao SQL, para nao haver uma segunda
+ * definicao da regra. `npm run verifica:objeto` prova as tres equivalentes
+ * contra um MySQL real — TypeScript, SQL cru e este `where`.
+ *
+ * Sobre `resumoMateria` nulo: para uma categoria concreta a linha sai (em SQL,
+ * `NOT (NULL LIKE ...)` e NULL, que nao passa no WHERE), e so `INDEFINIDO` a
+ * traz de volta com o ramo explicito de nulo — identico a `filtroObjetoSql`.
+ */
+const casaAlgumWhere = (padroes: string[]): Prisma.VotingWhereInput => ({
+  OR: padroes.map((padrao) => ({ subjectSummary: { contains: padrao } })),
+});
+
+export function filtroObjetoWhere(objeto: ObjetoVotacao): Prisma.VotingWhereInput {
+  const todosPadroes = REGRAS.flatMap((regra) => regra.padroes);
+
+  if (objeto === 'INDEFINIDO') {
+    return {
+      OR: [{ subjectSummary: null }, { NOT: casaAlgumWhere(todosPadroes) }],
+    };
+  }
+
+  const alternativas: Prisma.VotingWhereInput[] = [];
+
+  REGRAS.forEach((regra, indice) => {
+    if (regra.objeto !== objeto) {
+      return;
+    }
+
+    const anteriores = REGRAS.slice(0, indice).flatMap((r) => r.padroes);
+
+    alternativas.push(
+      anteriores.length
+        ? {
+            AND: [
+              casaAlgumWhere(regra.padroes),
+              { NOT: casaAlgumWhere(anteriores) },
+            ],
+          }
+        : casaAlgumWhere(regra.padroes),
+    );
+  });
+
+  return { OR: alternativas };
+}
+
+/** Disjuncao das categorias de merito, como `where`. */
+export function filtroMeritoWhere(): Prisma.VotingWhereInput {
+  return { OR: OBJETOS_DE_MERITO.map(filtroObjetoWhere) };
+}
+
 /** Recorte por objeto votado, aceito pelos endpoints que contam votos. */
 export type FiltroObjeto = {
   /** Restringe a uma categoria de objeto votado. */
@@ -216,4 +274,26 @@ export function condicaoDoFiltro(
   return partes.length
     ? Prisma.sql` AND ${Prisma.join(partes, ' AND ')}`
     : Prisma.empty;
+}
+
+/**
+ * As condicoes de `where` do recorte pedido, para entrar num `AND`.
+ *
+ * Devolve lista (e nao um objeto ja combinado) porque o chamador tem outras
+ * condicoes para somar no mesmo `AND` — combinar aqui obrigaria a aninhar.
+ */
+export function condicoesDoFiltroWhere(
+  filtros: FiltroObjeto,
+): Prisma.VotingWhereInput[] {
+  const partes: Prisma.VotingWhereInput[] = [];
+
+  if (filtros.objeto) {
+    partes.push(filtroObjetoWhere(filtros.objeto));
+  }
+
+  if (filtros.apenasMerito) {
+    partes.push(filtroMeritoWhere());
+  }
+
+  return partes;
 }

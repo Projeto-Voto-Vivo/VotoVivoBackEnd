@@ -10,7 +10,12 @@ import {
   resumirBalde,
 } from '../domain/presence';
 import { cargoDaCasa } from '../lib/casas';
-import { classificarObjeto, ehMerito } from '../domain/objeto-votacao';
+import {
+  classificarObjeto,
+  condicoesDoFiltroWhere,
+  ehMerito,
+  ObjetoVotacao,
+} from '../domain/objeto-votacao';
 import { AlignmentService } from './alignment.service';
 import { FiltroObjeto, ThemeProfileService } from './theme-profile.service';
 import { ThemeAlignmentService } from './theme-alignment.service';
@@ -58,6 +63,26 @@ type ExpenseSummaryFilters = {
 type PaginatedFilters = {
   pagina?: number;
   limite?: number;
+};
+
+/**
+ * Filtros de `GET /parlamentares/:id/votacoes`.
+ *
+ * Os quatro primeiros sao da PROPOSICAO votada, nao da votacao: sao os mesmos
+ * de `GET /proposicoes`, aplicados atraves do vinculo `votacao.idProposicao`.
+ */
+export type ListVotingsFilters = PaginatedFilters & {
+  /** Id interno da proposicao — o caso "quero ver esta materia". */
+  proposicao?: number;
+  /** Sigla do tipo da proposicao votada (`PL`, `PEC`, `MPV`). */
+  tipo?: string;
+  ano?: number;
+  /** Descricao exata do tema, como em `/proposicoes/filtros`. */
+  tema?: string;
+  /** Texto na ementa da proposicao OU no resumo da votacao. */
+  busca?: string;
+  objeto?: ObjetoVotacao;
+  apenasMerito?: boolean;
 };
 
 export class ParliamentarianService {
@@ -510,17 +535,31 @@ export class ParliamentarianService {
     };
   }
 
+  /**
+   * Votacoes em que o parlamentar votou, com os filtros da PROPOSICAO votada.
+   *
+   * O recorte acontece no banco, e nao sobre a pagina ja lida: filtrar em
+   * memoria devolveria 20 linhas das quais poucas sobrevivem, e `meta.total`
+   * passaria a contar o universo em vez do resultado.
+   *
+   * Contrato que a interface precisa saber: votacao sem proposicao vinculada
+   * — requerimento, questao de ordem — nao casa com filtro de proposicao
+   * nenhum, entao SAI do resultado assim que um deles e usado. Quantas sairam
+   * vai em `meta.excluidos`, para a ausencia nao ser lida como inexistencia.
+   */
   async listVotingsByParliamentarianId(
     parliamentarianId: number,
-    filters: PaginatedFilters,
+    filters: ListVotingsFilters,
   ) {
     await this.ensureParliamentarianExists(parliamentarianId);
 
     const { page, limit } = this.toPagination(filters);
+    const recorteDeObjeto = condicoesDoFiltroWhere(filters);
+    const where = this.buildVotingsWhere(parliamentarianId, filters, recorteDeObjeto);
 
-    const [votes, total] = await Promise.all([
+    const [votes, total, semProposicao] = await Promise.all([
       this.prisma.vote.findMany({
-        where: { parliamentarianId },
+        where,
         include: {
           voting: {
             include: {
@@ -532,7 +571,20 @@ export class ParliamentarianService {
         skip: (page - 1) * limit,
         take: limit,
       }),
-      this.prisma.vote.count({ where: { parliamentarianId } }),
+      this.prisma.vote.count({ where }),
+      // So custa uma consulta quando ha o que declarar. Sem filtro de
+      // proposicao essas votacoes estao no resultado, e nada foi excluido.
+      temFiltroDeProposicao(filters)
+        ? this.prisma.vote.count({
+            where: {
+              parliamentarianId,
+              voting: {
+                propositionId: null,
+                ...(recorteDeObjeto.length ? { AND: recorteDeObjeto } : {}),
+              },
+            },
+          })
+        : Promise.resolve(0),
     ]);
 
     return {
@@ -563,7 +615,80 @@ export class ParliamentarianService {
             : null,
         };
       }),
-      meta: buildMeta(total, page, limit),
+      meta: {
+        ...buildMeta(total, page, limit),
+        excluidos: {
+          // Votacoes do parlamentar sem proposicao vinculada que os filtros de
+          // proposicao deixaram de fora. `0` quando nenhum deles esta ativo —
+          // ai elas estao no resultado.
+          votacoesSemProposicao: semProposicao,
+        },
+      },
+      filtros: {
+        proposicao: filters.proposicao ?? null,
+        tipo: filters.tipo ?? null,
+        ano: filters.ano ?? null,
+        tema: filters.tema ?? null,
+        busca: filters.busca ?? null,
+        objeto: filters.objeto ?? null,
+        apenasMerito: Boolean(filters.apenasMerito),
+      },
+    };
+  }
+
+  /**
+   * `AND` de condicoes, e nao um objeto unico: `busca` e o recorte de objeto
+   * precisam de `OR` proprios, e aninhar tudo num objeto so faria um `OR`
+   * sobrescrever o outro em silencio.
+   */
+  private buildVotingsWhere(
+    parliamentarianId: number,
+    filters: ListVotingsFilters,
+    recorteDeObjeto: Prisma.VotingWhereInput[],
+  ): Prisma.VoteWhereInput {
+    const condicoes: Prisma.VotingWhereInput[] = [...recorteDeObjeto];
+    const proposicao: Prisma.PropositionWhereInput = {};
+
+    if (filters.proposicao !== undefined) {
+      proposicao.id = filters.proposicao;
+    }
+
+    // A sigla se repete entre as casas (`PL` existe nas duas); o filtro e pela
+    // relacao, como em `/proposicoes`.
+    if (filters.tipo) {
+      proposicao.propositionType = { sigla: filters.tipo.toUpperCase() };
+    }
+
+    if (filters.ano !== undefined) {
+      proposicao.year = filters.ano;
+    }
+
+    // Pela descricao, e nao pelo id: a mesma descricao existe nas duas casas
+    // com ids diferentes, e quem escolhe "Saude" num dropdown espera as duas.
+    if (filters.tema) {
+      proposicao.temaProposicao = { some: { tema: { descricao: filters.tema } } };
+    }
+
+    if (temFiltroDeProposicao(filters)) {
+      // Relacao opcional: exigir que ela case ja exclui votacao sem proposicao.
+      condicoes.push({ proposition: { is: proposicao } });
+    }
+
+    // `busca` e o unico que NAO exige proposicao: ele tambem olha o resumo da
+    // propria votacao, entao um requerimento pode casar por merito proprio.
+    // A collation e `utf8mb4_unicode_ci`, insensivel a caixa E a acento.
+    if (filters.busca) {
+      condicoes.push({
+        OR: [
+          { subjectSummary: { contains: filters.busca } },
+          { proposition: { is: { summary: { contains: filters.busca } } } },
+        ],
+      });
+    }
+
+    return {
+      parliamentarianId,
+      ...(condicoes.length ? { voting: { AND: condicoes } } : {}),
     };
   }
 
@@ -832,4 +957,19 @@ export class ParliamentarianService {
 
 function toIsoDate(date: Date | null | undefined): string | null {
   return date ? date.toISOString().split('T')[0] : null;
+}
+
+/**
+ * Ha algum filtro que so uma proposicao pode satisfazer?
+ *
+ * `busca` fica de fora de proposito: ela tambem casa no resumo da propria
+ * votacao, entao nao obriga a existir proposicao vinculada.
+ */
+function temFiltroDeProposicao(filters: ListVotingsFilters): boolean {
+  return (
+    filters.proposicao !== undefined ||
+    filters.ano !== undefined ||
+    Boolean(filters.tipo) ||
+    Boolean(filters.tema)
+  );
 }

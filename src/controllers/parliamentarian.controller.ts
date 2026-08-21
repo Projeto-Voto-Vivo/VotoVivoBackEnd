@@ -158,10 +158,19 @@ export class ParliamentarianController {
   ) => {
     try {
       const id = parsePositiveInt(req.params.id, 'id');
+      const query = req.query as Record<string, unknown>;
+
       const result =
         await this.parliamentarianService.listVotingsByParliamentarianId(id, {
-          pagina: getOptionalNumber(req.query.pagina),
-          limite: getOptionalNumber(req.query.limite),
+          pagina: getOptionalNumber(query.pagina),
+          limite: getOptionalNumber(query.limite),
+          proposicao: opcionalPositivo(query.proposicao, 'proposicao'),
+          tipo: getOptionalString(query.tipo),
+          ano: opcionalPositivo(query.ano, 'ano'),
+          tema: getOptionalString(query.tema),
+          busca: getOptionalString(query.busca),
+          objeto: parseObjeto(query.objeto),
+          apenasMerito: query.apenasMerito === 'true',
         });
 
       res.status(200).json(result);
@@ -302,6 +311,18 @@ export class ParliamentarianController {
  * servidor descarta em silencio devolve a lista inteira e o cliente acredita
  * que ela ja esta recortada.
  */
+/**
+ * Inteiro positivo opcional. Vazio e ausente sao a mesma coisa; qualquer outra
+ * coisa e 400 — `Number('abc')` e `NaN`, e `NaN` no Prisma vira 500.
+ */
+function opcionalPositivo(valor: unknown, campo: string): number | undefined {
+  if (valor === undefined || valor === '') {
+    return undefined;
+  }
+
+  return parsePositiveInt(valor, campo);
+}
+
 function parseObjeto(valor: unknown): ObjetoVotacao | undefined {
   const objeto = getOptionalString(valor);
 

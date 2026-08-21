@@ -1,12 +1,17 @@
 /**
- * Prova que o classificador de objeto de votacao decide o MESMO em TypeScript
- * e em SQL.
+ * Prova que o classificador de objeto de votacao decide o MESMO nas TRES
+ * traducoes da mesma lista de regras.
  *
- * A regra vive em `src/domain/objeto-votacao.ts` e e usada de duas formas: em
- * TS para exibir o campo `objeto`, e traduzida para SQL para filtrar a
- * agregacao por tema. Teste unitario cobre o lado TS; so um MySQL real prova o
- * lado SQL — `LIKE`, a collation insensivel a acento e a ordem das regras nao
- * existem num mock.
+ * A regra vive em `src/domain/objeto-votacao.ts` e e usada de tres formas:
+ *
+ *   TypeScript        exibir o campo `objeto` de cada votacao
+ *   SQL cru           filtrar a agregacao por tema (`$queryRaw`)
+ *   where do Prisma   filtrar `GET /parlamentares/:id/votacoes` (`findMany`)
+ *
+ * Teste unitario cobre so o lado TS. `LIKE`, a collation insensivel a acento e
+ * a ordem das regras nao existem num mock — e um `where` que classifique
+ * diferente do que a interface exibe devolveria uma lista contradizendo os
+ * proprios rotulos, sem erro nenhum.
  *
  * Uso (exige Docker):
  *   bash scripts/verifica-objeto-votacao.sh
@@ -17,7 +22,9 @@ import {
   classificarObjeto,
   ehMerito,
   filtroMeritoSql,
+  filtroMeritoWhere,
   filtroObjetoSql,
+  filtroObjetoWhere,
   OBJETOS_VOTACAO,
   ObjetoVotacao,
 } from '../src/domain/objeto-votacao';
@@ -69,7 +76,8 @@ async function main() {
   let divergencias = 0;
 
   console.log(
-    `${'objeto (TS)'.padEnd(16)}${'objeto (SQL)'.padEnd(16)}${'merito'.padEnd(8)}resumo`,
+    `${'objeto (TS)'.padEnd(16)}${'objeto (SQL)'.padEnd(16)}` +
+      `${'objeto (where)'.padEnd(16)}${'merito'.padEnd(8)}resumo`,
   );
 
   for (const [i, resumo] of RESUMOS.entries()) {
@@ -87,12 +95,27 @@ async function main() {
       }
     }
 
+    // A mesma pergunta pelo `where` que a listagem de votacoes usa.
+    const casadasWhere: ObjetoVotacao[] = [];
+    for (const objeto of OBJETOS_VOTACAO) {
+      const n = await prisma.voting.count({
+        where: { apiId: `obj-${i}`, AND: [filtroObjetoWhere(objeto)] },
+      });
+      if (n > 0) {
+        casadasWhere.push(objeto);
+      }
+    }
+
     const emSql = casadas.length === 1 ? casadas[0] : `AMBIGUO:${casadas.join('|')}`;
-    const igual = emSql === emTs;
+    const emWhere =
+      casadasWhere.length === 1
+        ? casadasWhere[0]
+        : `AMBIGUO:${casadasWhere.join('|')}`;
+    const igual = emSql === emTs && emWhere === emTs;
     if (!igual) divergencias += 1;
 
     console.log(
-      `${emTs.padEnd(16)}${String(emSql).padEnd(16)}` +
+      `${emTs.padEnd(16)}${String(emSql).padEnd(16)}${String(emWhere).padEnd(16)}` +
         `${(ehMerito(emTs) ? 'sim' : 'nao').padEnd(8)}` +
         `${igual ? '' : '<<< DIVERGE  '}${(resumo || '(vazio)').slice(0, 58)}`,
     );
@@ -103,11 +126,17 @@ async function main() {
     SELECT COUNT(*) AS n FROM votacao va WHERE ${filtroMeritoSql(COLUNA)}
   `;
   const esperado = RESUMOS.filter((r) => ehMerito(classificarObjeto(r))).length;
+  const noWhere = await prisma.voting.count({ where: { AND: [filtroMeritoWhere()] } });
 
-  console.log(`\nfiltro de merito: SQL=${Number(n)} TS=${esperado}`);
+  console.log(`\nfiltro de merito: TS=${esperado} SQL=${Number(n)} where=${noWhere}`);
   if (Number(n) !== esperado) divergencias += 1;
+  if (noWhere !== esperado) divergencias += 1;
 
-  console.log(divergencias === 0 ? '\nOK: TS e SQL classificam identico.' : `\nFALHA: ${divergencias} divergencia(s).`);
+  console.log(
+    divergencias === 0
+      ? '\nOK: TypeScript, SQL cru e where do Prisma classificam identico.'
+      : `\nFALHA: ${divergencias} divergencia(s).`,
+  );
   process.exitCode = divergencias === 0 ? 0 : 1;
 }
 

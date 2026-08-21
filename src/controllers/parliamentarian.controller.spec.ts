@@ -505,7 +505,10 @@ describe('ParliamentarianController', () => {
       expect(response.body.data).toHaveLength(1);
       expect(response.body.data[0].voto).toBe('YES');
       expect(response.body.meta).toEqual({ total: 1, page: 1, lastPage: 1, limit: 20 });
-      expect(serviceMock.listVotingsByParliamentarianId).toHaveBeenCalledWith(1, { pagina: 1 });
+      expect(serviceMock.listVotingsByParliamentarianId).toHaveBeenCalledWith(1, {
+        pagina: 1,
+        apenasMerito: false,
+      });
     });
 
     it('should pass undefined pagina when not provided', async () => {
@@ -518,7 +521,65 @@ describe('ParliamentarianController', () => {
 
       expect(serviceMock.listVotingsByParliamentarianId).toHaveBeenCalledWith(1, {
         pagina: undefined,
+        apenasMerito: false,
       });
+    });
+
+    it('should forward every proposition filter', async () => {
+      serviceMock.listVotingsByParliamentarianId.mockResolvedValue({ data: [], meta: {} });
+
+      await request(app)
+        .get('/parlamentares/1/votacoes')
+        .query({
+          tipo: 'PL',
+          ano: '2025',
+          tema: 'Saúde',
+          busca: 'merenda',
+          objeto: 'texto_base',
+          apenasMerito: 'true',
+        });
+
+      expect(serviceMock.listVotingsByParliamentarianId).toHaveBeenCalledWith(1, {
+        pagina: undefined,
+        limite: undefined,
+        proposicao: undefined,
+        tipo: 'PL',
+        ano: 2025,
+        tema: 'Saúde',
+        busca: 'merenda',
+        objeto: 'TEXTO_BASE',
+        apenasMerito: true,
+      });
+    });
+
+    /** O caso "quero ver esta materia" sem folhear ate achar. */
+    it('should forward the proposition id', async () => {
+      serviceMock.listVotingsByParliamentarianId.mockResolvedValue({ data: [], meta: {} });
+
+      await request(app).get('/parlamentares/1/votacoes?proposicao=1000');
+
+      expect(serviceMock.listVotingsByParliamentarianId).toHaveBeenCalledWith(
+        1,
+        expect.objectContaining({ proposicao: 1000 }),
+      );
+    });
+
+    /**
+     * `Number('abc')` e `NaN`, e `NaN` chegando ao Prisma vira 500. Um filtro
+     * invalido tem de ser 400, nao uma lista silenciosamente sem recorte.
+     */
+    it.each(['ano', 'proposicao'])('should return 400 when %s is not a number', async (campo) => {
+      const response = await request(app).get(`/parlamentares/1/votacoes?${campo}=abc`);
+
+      expect(response.status).toBe(400);
+      expect(serviceMock.listVotingsByParliamentarianId).not.toHaveBeenCalled();
+    });
+
+    it('should return 400 for an object outside the domain', async () => {
+      const response = await request(app).get('/parlamentares/1/votacoes?objeto=QUALQUER');
+
+      expect(response.status).toBe(400);
+      expect(serviceMock.listVotingsByParliamentarianId).not.toHaveBeenCalled();
     });
 
     it('should return 400 when id is invalid', async () => {

@@ -21,7 +21,8 @@
     "schema:check": "bash scripts/schema-check.sh",
     "verifica:objeto": "bash scripts/verifica-objeto-votacao.sh",
     "verifica:bancada": "bash scripts/verifica-bancada.sh",
-    "verifica:alinhamento-tema": "bash scripts/verifica-alinhamento-tema.sh"
+    "verifica:alinhamento-tema": "bash scripts/verifica-alinhamento-tema.sh",
+    "verifica:filtros-votacoes": "bash scripts/verifica-filtros-votacoes.sh"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.8.0",
