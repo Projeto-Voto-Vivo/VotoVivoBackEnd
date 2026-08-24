@@ -512,7 +512,21 @@ paths:
   /parlamentares/{id}/emendas/resumo:
     get:
       summary: Resumo de emendas
-      description: Retorna totais agregados das emendas vinculadas ao parlamentar.
+      description: >
+        Totais das emendas vinculadas ao parlamentar, mais dois recortes:
+        `porFuncao` (em que áreas atua) e `porLocalidade` (para onde o dinheiro
+        foi).
+
+
+        Os recortes vivem aqui, e não no cliente, por correção: o frontend só
+        tem em mãos a página carregada de `/emendas`, então somar do lado dele
+        produziria um total que **parece** certo e não é.
+
+
+        Emendas sem função ou sem localidade na fonte ficam fora dos arrays e
+        são declaradas em `metadata` — em contagem e em valor, para o painel
+        conseguir explicar por que a soma das barras não fecha com
+        `totalEmpenhado`.
       tags:
         - Emendas
       parameters:
@@ -1942,6 +1956,27 @@ components:
           type: number
           format: float
 
+    GrupoEmendas:
+      type: object
+      description: >
+        Uma fatia do total de emendas do parlamentar. Traz dinheiro e não só
+        contagem: uma emenda de R$ 5 milhões e uma de R$ 50 mil contam igual
+        numa contagem, e é o dinheiro que diz onde ele de fato atua.
+      properties:
+        quantidade:
+          type: integer
+        empenhado:
+          type: string
+          example: '21400000.00'
+          description: >
+            String decimal com duas casas, não número. Valores na casa dos
+            milhões com centavos perdem precisão em float, e a soma passa a não
+            fechar por alguns centavos sem que nada acuse.
+        pago:
+          type: string
+          example: '11200000.00'
+          description: O que efetivamente saiu do caixa — menor que o empenhado.
+
     EmendaResumo:
       type: object
       properties:
@@ -1956,6 +1991,64 @@ components:
         totalPago:
           type: number
           format: float
+        totalRestoInscrito:
+          type: number
+          format: float
+        porFuncao:
+          type: array
+          description: >
+            Em que áreas o parlamentar atua. Agrupado por `funcao` e nunca por
+            `subfuncao`: a função tem um punhado de categorias legíveis, a
+            subfunção esmigalha e cada barra vira um caso isolado. Ordenado por
+            `empenhado` decrescente; sem truncamento.
+          items:
+            allOf:
+              - type: object
+                properties:
+                  funcao:
+                    type: string
+                    example: Saúde
+              - $ref: '#/components/schemas/GrupoEmendas'
+        porLocalidade:
+          type: array
+          description: >
+            Para onde o dinheiro foi. `localidade` é o texto do Portal, agrupado
+            sem unificar grafias — dois municípios homônimos em estados
+            diferentes são destinos diferentes, e unificar errado esconderia o
+            destino real. Variação de caixa e de acento já é unificada pela
+            collation do banco. Sem truncamento.
+          items:
+            allOf:
+              - type: object
+                properties:
+                  localidade:
+                    type: string
+                    example: SÃO PAULO - SP
+              - $ref: '#/components/schemas/GrupoEmendas'
+        metadata:
+          type: object
+          properties:
+            semFuncao:
+              type: integer
+              description: >
+                Emendas sem o campo preenchido na fonte. Ficam **fora** de
+                `porFuncao` em vez de virar um balde "Não informado", que seria
+                uma barra grande competindo com áreas reais.
+            semLocalidade:
+              type: integer
+            empenhadoSemFuncao:
+              type: string
+              example: '4100000.00'
+              description: >
+                Quanto as excluídas somam. `totalEmpenhado` menos este valor é a
+                soma de `porFuncao` — sem ele, a diferença entre as barras e o
+                total ficaria sem explicação, e o usuário não distinguiria bug
+                de lacuna da fonte.
+            empenhadoSemLocalidade:
+              type: string
+              example: '900000.00'
+            observacao:
+              type: string
 
     EmendaDetalhe:
       allOf:

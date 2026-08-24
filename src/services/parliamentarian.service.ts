@@ -10,6 +10,7 @@ import {
   resumirBalde,
 } from '../domain/presence';
 import { cargoDaCasa } from '../lib/casas';
+import { agruparEmendas } from '../domain/agrupamento-emendas';
 import {
   classificarObjeto,
   condicoesDoFiltroWhere,
@@ -466,27 +467,100 @@ export class ParliamentarianService {
     };
   }
 
+  /**
+   * Totais das emendas do parlamentar, mais os dois recortes que respondem
+   * "em que area" e "para onde".
+   *
+   * Os recortes vivem aqui, e nao no cliente, por um motivo de correcao: o
+   * frontend so tem em maos a pagina carregada de `/emendas`, entao somar do
+   * lado dele produziria um total que PARECE certo e nao e — o pior tipo de
+   * numero numa ferramenta de fiscalizacao.
+   *
+   * Agrupa por `funcao`, nunca por `subfuncao`: a funcao tem um punhado de
+   * categorias legiveis e responde a pergunta; a subfuncao esmigalha, cada
+   * barra vira um caso isolado. A subfuncao continua no detalhe de cada emenda.
+   */
   async getAmendmentSummaryByParliamentarianId(parliamentarianId: number) {
     await this.ensureParliamentarianExists(parliamentarianId);
 
+    const daPessoa = { parliamentarianLinks: { some: { parliamentarianId } } };
+
     // Agregacao no banco. Antes era um `reduce` em JS sobre todos os vinculos.
-    const [totalEmendas, somas] = await Promise.all([
+    const [totalEmendas, somas, funcoes, localidades] = await Promise.all([
       this.prisma.amendmentParliamentarian.count({ where: { parliamentarianId } }),
       this.prisma.amendment.aggregate({
-        where: { parliamentarianLinks: { some: { parliamentarianId } } },
+        where: daPessoa,
         _sum: {
           committedAmount: true,
           liquidatedAmount: true,
           paidAmount: true,
+          remainderRegistered: true,
         },
       }),
+      this.prisma.amendment.groupBy({
+        by: ['functionName'],
+        where: daPessoa,
+        _count: { _all: true },
+        _sum: { committedAmount: true, paidAmount: true },
+      }),
+      this.prisma.amendment.groupBy({
+        by: ['spendingLocation'],
+        where: daPessoa,
+        _count: { _all: true },
+        _sum: { committedAmount: true, paidAmount: true },
+      }),
     ]);
+
+    const porFuncao = agruparEmendas(
+      funcoes.map((linha) => ({
+        chave: linha.functionName,
+        quantidade: linha._count._all,
+        empenhado: linha._sum.committedAmount,
+        pago: linha._sum.paidAmount,
+      })),
+    );
+
+    const porLocalidade = agruparEmendas(
+      localidades.map((linha) => ({
+        chave: linha.spendingLocation,
+        quantidade: linha._count._all,
+        empenhado: linha._sum.committedAmount,
+        pago: linha._sum.paidAmount,
+      })),
+    );
 
     return {
       totalEmendas,
       totalEmpenhado: Number(somas._sum.committedAmount ?? 0),
       totalLiquidado: Number(somas._sum.liquidatedAmount ?? 0),
       totalPago: Number(somas._sum.paidAmount ?? 0),
+      totalRestoInscrito: Number(somas._sum.remainderRegistered ?? 0),
+      porFuncao: porFuncao.itens.map((item) => ({
+        funcao: item.chave,
+        quantidade: item.quantidade,
+        empenhado: item.empenhado,
+        pago: item.pago,
+      })),
+      porLocalidade: porLocalidade.itens.map((item) => ({
+        localidade: item.chave,
+        quantidade: item.quantidade,
+        empenhado: item.empenhado,
+        pago: item.pago,
+      })),
+      metadata: {
+        semFuncao: porFuncao.semDado,
+        semLocalidade: porLocalidade.semDado,
+        // A contagem sozinha nao reconcilia: 3 emendas de fora podem ser R$ 3
+        // ou R$ 30 milhoes. Com o valor, o painel fecha a conta na tela.
+        empenhadoSemFuncao: porFuncao.empenhadoSemDado,
+        empenhadoSemLocalidade: porLocalidade.empenhadoSemDado,
+        observacao:
+          'Emendas sem funcao ou sem localidade na fonte ficam FORA dos arrays e sao contadas aqui — ' +
+          'um balde "Nao informado" viraria uma barra grande competindo com areas reais. ' +
+          'Por isso a soma de porFuncao nao fecha com totalEmpenhado: a diferenca e empenhadoSemFuncao. ' +
+          'As listas nao sao truncadas. Localidade e o texto do Portal, agrupado sem unificar grafias ' +
+          '(variacao de caixa e acento ja e unificada pela collation do banco).',
+      },
     };
   }
 

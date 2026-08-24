@@ -21,6 +21,7 @@ describe('ParliamentarianService', () => {
       },
       amendment: {
         aggregate: jest.fn(),
+        groupBy: jest.fn().mockResolvedValue([]),
       },
       amendmentParliamentarian: {
         findMany: jest.fn(),
@@ -473,43 +474,175 @@ describe('ParliamentarianService', () => {
   });
 
   describe('getAmendmentSummaryByParliamentarianId', () => {
-    it('should aggregate in the database instead of reducing in JS', async () => {
+    /** Uma linha de `groupBy`, no formato que o Prisma devolve. */
+    const grupo = (
+      chave: string | null,
+      quantidade: number,
+      empenhado: unknown,
+      pago: unknown,
+    ) => ({ chave, quantidade, empenhado, pago });
+
+    const responder = (opcoes: {
+      total?: number;
+      somas?: Record<string, unknown>;
+      funcoes?: ReturnType<typeof grupo>[];
+      localidades?: ReturnType<typeof grupo>[];
+    }) => {
       prismaMock.parliamentarian.findUnique.mockResolvedValue({ id: 1 });
-      prismaMock.amendmentParliamentarian.count.mockResolvedValue(2);
+      prismaMock.amendmentParliamentarian.count.mockResolvedValue(opcoes.total ?? 0);
       prismaMock.amendment.aggregate.mockResolvedValue({
-        _sum: { committedAmount: 150000, liquidatedAmount: 120000, paidAmount: 120000 },
+        _sum: opcoes.somas ?? {
+          committedAmount: null,
+          liquidatedAmount: null,
+          paidAmount: null,
+          remainderRegistered: null,
+        },
+      });
+
+      const linhas = (grupos: ReturnType<typeof grupo>[] = [], campo: string) =>
+        grupos.map((g) => ({
+          [campo]: g.chave,
+          _count: { _all: g.quantidade },
+          _sum: { committedAmount: g.empenhado, paidAmount: g.pago },
+        }));
+
+      prismaMock.amendment.groupBy
+        .mockResolvedValueOnce(linhas(opcoes.funcoes, 'functionName'))
+        .mockResolvedValueOnce(linhas(opcoes.localidades, 'spendingLocation'));
+    };
+
+    it('should aggregate in the database instead of reducing in JS', async () => {
+      responder({
+        total: 2,
+        somas: {
+          committedAmount: 150000,
+          liquidatedAmount: 120000,
+          paidAmount: 120000,
+          remainderRegistered: 4100,
+        },
       });
 
       const result = await service.getAmendmentSummaryByParliamentarianId(1);
 
       expect(prismaMock.amendment.aggregate).toHaveBeenCalledWith({
         where: { parliamentarianLinks: { some: { parliamentarianId: 1 } } },
-        _sum: { committedAmount: true, liquidatedAmount: true, paidAmount: true },
+        _sum: {
+          committedAmount: true,
+          liquidatedAmount: true,
+          paidAmount: true,
+          remainderRegistered: true,
+        },
       });
       // Nao pode mais puxar a lista inteira de vinculos para a memoria.
       expect(prismaMock.amendmentParliamentarian.findMany).not.toHaveBeenCalled();
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         totalEmendas: 2,
         totalEmpenhado: 150000,
         totalLiquidado: 120000,
         totalPago: 120000,
+        totalRestoInscrito: 4100,
       });
     });
 
     it('should return zeros when no amendments found', async () => {
-      prismaMock.parliamentarian.findUnique.mockResolvedValue({ id: 1 });
-      prismaMock.amendmentParliamentarian.count.mockResolvedValue(0);
-      prismaMock.amendment.aggregate.mockResolvedValue({
-        _sum: { committedAmount: null, liquidatedAmount: null, paidAmount: null },
-      });
+      responder({});
 
       const result = await service.getAmendmentSummaryByParliamentarianId(1);
 
-      expect(result).toEqual({
+      expect(result).toMatchObject({
         totalEmendas: 0,
         totalEmpenhado: 0,
         totalLiquidado: 0,
         totalPago: 0,
+        porFuncao: [],
+        porLocalidade: [],
+      });
+    });
+
+    describe('recortes por funcao e localidade', () => {
+      /**
+       * O recorte tem de vir do servidor: o cliente so tem em maos a pagina
+       * carregada, entao somar do lado dele daria um total que parece certo e
+       * nao e — o pior tipo de numero numa ferramenta de fiscalizacao.
+       */
+      it('should group by function with money, not just a count', async () => {
+        responder({
+          total: 49,
+          funcoes: [
+            grupo('Saúde', 31, '21400000.00', '11200000.00'),
+            grupo('Educação', 18, '9800000.00', '6100000.00'),
+          ],
+        });
+
+        const result = await service.getAmendmentSummaryByParliamentarianId(1);
+
+        expect(result.porFuncao).toEqual([
+          { funcao: 'Saúde', quantidade: 31, empenhado: '21400000.00', pago: '11200000.00' },
+          { funcao: 'Educação', quantidade: 18, empenhado: '9800000.00', pago: '6100000.00' },
+        ]);
+      });
+
+      it('should group by the spending location text', async () => {
+        responder({
+          localidades: [grupo('SÃO PAULO - SP', 14, '12800000.00', '7300000.00')],
+        });
+
+        const result = await service.getAmendmentSummaryByParliamentarianId(1);
+
+        expect(result.porLocalidade[0]).toEqual({
+          localidade: 'SÃO PAULO - SP',
+          quantidade: 14,
+          empenhado: '12800000.00',
+          pago: '7300000.00',
+        });
+      });
+
+      /** Nunca por subfuncao: ela esmigalha e cada barra vira um caso isolado. */
+      it('should group by funcao and never by subfuncao', async () => {
+        responder({});
+
+        await service.getAmendmentSummaryByParliamentarianId(1);
+
+        const agrupamentos = prismaMock.amendment.groupBy.mock.calls.map(
+          (chamada: any[]) => chamada[0].by,
+        );
+
+        expect(agrupamentos).toEqual([['functionName'], ['spendingLocation']]);
+      });
+
+      /**
+       * A soma das barras nao fecha com `totalEmpenhado`, e o painel precisa
+       * poder dizer por que. Sem o valor, o usuario nao distingue bug de lacuna
+       * da fonte.
+       */
+      it('should declare what was left out, in count and in money', async () => {
+        responder({
+          funcoes: [grupo('Saúde', 31, '21400000.00', '0'), grupo(null, 3, '4100000.00', '0')],
+          localidades: [grupo('', 7, '900000.00', '0')],
+        });
+
+        const result = await service.getAmendmentSummaryByParliamentarianId(1);
+
+        expect(result.porFuncao).toHaveLength(1);
+        expect(result.metadata).toMatchObject({
+          semFuncao: 3,
+          semLocalidade: 7,
+          empenhadoSemFuncao: '4100000.00',
+          empenhadoSemLocalidade: '900000.00',
+        });
+      });
+
+      /** As duas consultas olham a mesma populacao dos totais. */
+      it('should group over the same population as the totals', async () => {
+        responder({});
+
+        await service.getAmendmentSummaryByParliamentarianId(1);
+
+        for (const chamada of prismaMock.amendment.groupBy.mock.calls) {
+          expect(chamada[0].where).toEqual({
+            parliamentarianLinks: { some: { parliamentarianId: 1 } },
+          });
+        }
       });
     });
 

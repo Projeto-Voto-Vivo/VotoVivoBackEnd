@@ -142,6 +142,7 @@ npm run verifica:objeto             # objeto da votação: TS == SQL cru == wher
 npm run verifica:bancada            # partido, bloco e federação; uma orientação por votação
 npm run verifica:alinhamento-tema   # os temas fecham com o total, e a diferença é declarada
 npm run verifica:filtros-votacoes   # filtros recortam no banco; sem proposição sai declarada
+npm run verifica:resumo-emendas     # os recortes de emenda fecham com o total, sem perder centavo
 npm run schema:check                # schema.prisma == schema.sql do agregador
 ```
 
@@ -216,6 +217,7 @@ A documentação interativa está disponível via Swagger UI após iniciar o ser
 | `GET` | `/parlamentares/:id/alinhamento` | Fidelidade partidária isolada, sem pagar o perfil inteiro |
 | `GET` | `/parlamentares/:id/alinhamento/temas` | A mesma taxa aberta por tema — onde a divergência está, não só quanta |
 | `GET` | `/parlamentares/:id/votacoes` | Aceita `proposicao`, `tipo`, `ano`, `tema`, `busca`, `objeto` e `apenasMerito` |
+| `GET` | `/parlamentares/:id/emendas/resumo` | Totais mais `porFuncao` e `porLocalidade` — em que área atua e para onde o dinheiro foi |
 | `GET` | `/parlamentares/:id/emendas` | Emendas vinculadas, paginadas, com `metodoVinculo` e `confiancaVinculo` |
 | `GET` | `/parlamentares/:id/emendas/resumo` | Totais agregados de emendas (empenhado, liquidado, pago) |
 
