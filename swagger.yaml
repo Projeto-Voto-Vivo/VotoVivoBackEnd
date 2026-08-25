@@ -677,6 +677,162 @@ paths:
         '500':
           $ref: '#/components/responses/ErroInterno'
 
+  /parlamentares/ranking:
+    get:
+      summary: Ranking de parlamentares por afinidade
+      description: >
+        Busca personalizada: dado um assunto, uma área de emenda, um destino de
+        emenda e/ou uma comissão, devolve os parlamentares ordenados por
+        afinidade com o que foi pedido.
+
+
+        **O que este ranking mede.** ATUAÇÃO — quem propõe sobre o tema, quem
+        destina emenda para aquela área ou município, quem senta na comissão.
+        **Não mede concordância:** o usuário informa um assunto, não uma
+        posição, então "atua em Meio Ambiente" inclui tanto quem defende quanto
+        quem se opõe à pauta ambiental. Não rotule o resultado como "quem mais
+        concorda com você" — o dado não sustenta essa leitura.
+
+
+        **Critérios × filtros.** `tema`, `funcaoEmenda`, `destinoEmenda` e
+        `comissao` **pontuam**; `partido`, `casa` e `uf` apenas **recortam** o
+        conjunto. Pelo menos um critério é obrigatório: filtro sozinho não
+        define ordem, e devolver todo mundo sob um campo `pontuacao` seria
+        inventar um número. Sem critério, 400.
+
+
+        **Cálculo.** Cada critério vira 0-100 dividindo o valor do parlamentar
+        pelo maior valor entre os candidatos — o primeiro colocado de cada
+        critério marca 100 por construção. A nota final é a média ponderada dos
+        critérios pedidos. Critério sem sinal conta **zero**, não é ignorado:
+        quem atende um de três não pode empatar com quem atende os três;
+        `criteriosAtendidos` permite à interface dizer "atende 2 de 3".
+
+
+        **A nota é relativa ao conjunto filtrado.** Trocar o filtro de partido
+        muda todas as notas, porque muda o denominador. Para comparar entre
+        buscas, use os valores brutos de cada critério e
+        `metadata.criterios[].maiorValorNoPool`.
+
+
+        Os valores válidos saem de `GET /parlamentares/ranking/filtros`: a
+        comparação é por igualdade (ignorando caixa e acento), então texto
+        digitado que não case devolve lista vazia.
+      tags:
+        - Parlamentares
+      parameters:
+        - in: query
+          name: tema
+          schema:
+            type: string
+            example: Saúde
+          description: >
+            Critério. Proposições que o parlamentar assina e que têm este tema.
+        - in: query
+          name: funcaoEmenda
+          schema:
+            type: string
+            example: Saúde
+          description: >
+            Critério. Total empenhado em emendas dele com esta função de governo.
+        - in: query
+          name: destinoEmenda
+          schema:
+            type: string
+            example: SÃO PAULO - SP
+          description: >
+            Critério. Total empenhado em emendas dele com este destino. Não
+            confundir com `uf`, que é onde ele foi eleito.
+        - in: query
+          name: comissao
+          schema:
+            type: string
+            example: CSSF
+          description: >
+            Critério. Participação no órgão, por sigla ou nome. É binário — quem
+            é membro marca 100 —, e o cargo exercido vem em `criterios.comissao.detalhe`.
+        - in: query
+          name: partido
+          schema:
+            type: string
+            example: PT
+          description: Filtro. Partido atual; não pontua, apenas recorta.
+        - in: query
+          name: casa
+          schema:
+            type: string
+            enum: [camara, senado]
+          description: Filtro. Valor fora do domínio devolve 400.
+        - in: query
+          name: uf
+          schema:
+            type: string
+            example: SP
+          description: Filtro. UF de eleição do parlamentar.
+        - in: query
+          name: pesos
+          schema:
+            type: string
+            example: tema:3,destinoEmenda:2
+          description: >
+            Quanto cada critério vale na média. Ausente vale 1. Critério
+            desconhecido, peso não numérico, zero ou negativo devolvem 400 —
+            um peso descartado em silêncio produziria um ranking calculado de
+            outro jeito com a mesma cara do pedido.
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankingParlamentares'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /parlamentares/ranking/filtros:
+    get:
+      summary: Domínios válidos do ranking
+      description: >
+        Os valores aceitos por `tema`, `funcaoEmenda`, `destinoEmenda`,
+        `partido` e `comissao`, com contadores para ordenar por relevância.
+
+
+        Existe porque os critérios comparam por **igualdade**: um valor digitado
+        à mão que não case devolve lista vazia, e o usuário não teria como
+        distinguir "ninguém atua nisso" de "escrevi errado".
+
+
+        As opções são globais, não facetadas pela busca corrente — facetar
+        custaria uma consulta por dimensão a cada requisição.
+      tags:
+        - Parlamentares
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RankingFiltros'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
   /parlamentares/{id}/alinhamento/temas:
     get:
       summary: Fidelidade partidária por tema
@@ -2290,6 +2446,186 @@ components:
           description: >
             `partidoAtual` indica que não havia histórico de filiação e o partido
             atual foi usado como aproximação.
+
+    CriterioRanking:
+      type: object
+      properties:
+        pedido:
+          type: string
+          description: O valor que o usuário enviou para este critério.
+        valor:
+          oneOf:
+            - type: number
+            - type: string
+          description: >
+            Valor bruto do parlamentar. Número para contagem e participação;
+            string decimal para dinheiro, como no resumo de emendas. É o que
+            permite auditar a nota e comparar entre buscas diferentes.
+        unidade:
+          type: string
+          enum: [proposicoes, reais_empenhados, participacao]
+        pontuacao:
+          type: number
+          format: float
+          description: '`valor / maiorValorNoPool * 100`.'
+        detalhe:
+          type: string
+          description: >
+            Só em `comissao`: os cargos exercidos no órgão. Ser presidente e ser
+            suplente não são a mesma coisa, mas o dado não permite pesá-los sem
+            chutar as redações que o ETL grava — então vem como contexto, não
+            como peso.
+
+    ItemRanking:
+      type: object
+      properties:
+        id:
+          type: integer
+        nomeParlamentar:
+          type: string
+        siglaPartido:
+          type: string
+        uf:
+          type: string
+        urlFoto:
+          type: string
+        cargo:
+          type: string
+        pontuacao:
+          type: number
+          format: float
+          description: Média ponderada dos critérios pedidos, de 0 a 100.
+        criteriosAtendidos:
+          type: integer
+          description: >
+            Em quantos dos critérios pedidos ele tem sinal. Serve para a
+            interface dizer "atende 2 de 3" em vez de exibir só a média.
+        criteriosPedidos:
+          type: integer
+        criterios:
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/CriterioRanking'
+
+    RankingParlamentares:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ItemRanking'
+        meta:
+          $ref: '#/components/schemas/PaginationMeta'
+        metadata:
+          type: object
+          properties:
+            criterios:
+              type: array
+              items:
+                type: object
+                properties:
+                  criterio:
+                    type: string
+                  valorPedido:
+                    type: string
+                  unidade:
+                    type: string
+                  peso:
+                    type: number
+                  maiorValorNoPool:
+                    oneOf:
+                      - type: number
+                      - type: string
+                    description: >
+                      O denominador da normalização. Publicado porque é ele que
+                      torna a nota auditável — e porque muda junto com o filtro.
+            filtros:
+              type: object
+              properties:
+                partido:
+                  type: string
+                  nullable: true
+                casa:
+                  type: string
+                  nullable: true
+                uf:
+                  type: string
+                  nullable: true
+            candidatos:
+              type: integer
+              description: Quantos passaram nos filtros.
+            comAlgumSinal:
+              type: integer
+              description: >
+                Quantos têm sinal em ao menos um critério. Só estes entram na
+                lista: quem não tem relação nenhuma com o pedido não é um
+                resultado, e entraria só para encher a lista de notas zero.
+            criteriosSemResultado:
+              type: array
+              items:
+                type: string
+              description: >
+                Critérios em que ninguém no conjunto pontuou. A interface deve
+                avisar, senão o usuário lê o ranking como se todos os critérios
+                tivessem sido considerados.
+            metodo:
+              type: string
+            observacao:
+              type: string
+
+    RankingFiltros:
+      type: object
+      properties:
+        temas:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpcaoRanking'
+        funcoesEmenda:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpcaoRanking'
+        destinosEmenda:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpcaoRanking'
+        partidos:
+          type: array
+          items:
+            $ref: '#/components/schemas/OpcaoRanking'
+        comissoes:
+          type: array
+          items:
+            type: object
+            properties:
+              sigla:
+                type: string
+                nullable: true
+              nome:
+                type: string
+                nullable: true
+              casa:
+                type: string
+              membros:
+                type: integer
+        metadata:
+          type: object
+          properties:
+            destinosTruncadosEm:
+              type: integer
+              description: >
+                Há um destino por município atendido, e a cauda não cabe num
+                seletor. O corte vem declarado para o painel poder avisar em vez
+                de a lista parecer o domínio completo.
+            observacao:
+              type: string
+
+    OpcaoRanking:
+      type: object
+      properties:
+        valor:
+          type: string
+        total:
+          type: integer
 
     AlinhamentoDoTema:
       type: object

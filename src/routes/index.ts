@@ -5,9 +5,13 @@ import { voteRouter } from './vote.routes';
 import { propositionRouter } from './proposition.routes';
 import { amendmentRouter } from './amendment.routes';
 import { dashboardRouter } from './dashboard.routes';
+import { rankingRouter } from './ranking.routes';
 
 const router = Router();
 
+// ANTES do `parliamentarianRouter`: ele termina em `/parlamentares/:id`, que
+// casaria com `/parlamentares/ranking` e trataria "ranking" como um id.
+router.use(rankingRouter);
 router.use(parliamentarianRouter);
 router.use(votingRouter);
 router.use(voteRouter);

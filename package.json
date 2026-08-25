@@ -23,7 +23,8 @@
     "verifica:bancada": "bash scripts/verifica-bancada.sh",
     "verifica:alinhamento-tema": "bash scripts/verifica-alinhamento-tema.sh",
     "verifica:filtros-votacoes": "bash scripts/verifica-filtros-votacoes.sh",
-    "verifica:resumo-emendas": "bash scripts/verifica-resumo-emendas.sh"
+    "verifica:resumo-emendas": "bash scripts/verifica-resumo-emendas.sh",
+    "verifica:ranking": "bash scripts/verifica-ranking.sh"
   },
   "dependencies": {
     "@prisma/adapter-mariadb": "^7.8.0",
