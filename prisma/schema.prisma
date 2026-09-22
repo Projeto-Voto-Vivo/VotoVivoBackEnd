@@ -39,9 +39,33 @@ model Parliamentarian {
   presences          Presence[]
   socialNetworks     SocialNetwork[]
   votes              Vote[]
+  candidaturas       CandidaturaTse[]
 
   @@unique([apiId, role], map: "unique_parlamentar_api")
   @@map("parlamentar")
+}
+
+model CandidaturaTse {
+  id                  Int              @id @default(autoincrement()) @map("idCandidaturaTse")
+  parliamentarianId   Int?             @map("idParlamentar")
+  sqCandidato         String           @map("sqCandidato") @db.VarChar(50)
+  anoEleicao          Int              @map("anoEleicao")
+  descricaoEleicao    String?          @map("descricaoEleicao") @db.VarChar(255)
+  uf                  String?          @map("uf") @db.Char(2)
+  cargo               String?          @map("cargo") @db.VarChar(100)
+  numeroCandidato     String?          @map("numeroCandidato") @db.VarChar(20)
+  nomeUrna            String?          @map("nomeUrna") @db.VarChar(255)
+  nomeCivil           String?          @map("nomeCivil") @db.VarChar(255)
+  siglaPartido        String?          @map("siglaPartido") @db.VarChar(50)
+  situacaoCandidatura String?          @map("situacaoCandidatura") @db.VarChar(100)
+  resultadoEleicao    String?          @map("resultadoEleicao") @db.VarChar(100)
+
+  parliamentarian Parliamentarian? @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "candidaturaTse_ibfk_1")
+
+  @@unique([anoEleicao, sqCandidato], map: "unique_candidatura_ano_sq")
+  @@index([parliamentarianId], map: "idx_candidatura_parlamentar")
+  @@index([anoEleicao], map: "idx_candidatura_ano")
+  @@map("candidaturaTse")
 }
 
 model Party {
