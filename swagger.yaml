@@ -1752,6 +1752,108 @@ paths:
         '500':
           $ref: '#/components/responses/ErroInterno'
 
+  /candidatos:
+    get:
+      summary: Lista candidaturas
+      description: >
+        Listagem paginada das candidaturas registradas no TSE, ordenada por nome
+        de urna. Quando a candidatura está vinculada a um parlamentar, traz o
+        `idParlamentar` para navegação até o perfil.
+      tags:
+        - Candidatos
+      parameters:
+        - in: query
+          name: nome
+          schema:
+            type: string
+          description: Filtrar por parte do nome de urna ou do nome civil
+        - in: query
+          name: partido
+          schema:
+            type: string
+          description: Sigla do partido (ex. PL, PT)
+        - in: query
+          name: uf
+          schema:
+            type: string
+          description: Sigla do estado (ex. SP, RJ; BR para presidente)
+        - in: query
+          name: cargo
+          schema:
+            type: string
+          description: Cargo exato da candidatura (ex. DEPUTADO FEDERAL, SENADOR)
+        - in: query
+          name: ano
+          schema:
+            type: integer
+          description: Ano da eleição (ex. 2022)
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+          description: Valores inválidos são tratados como 1.
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+          description: Valores inválidos voltam ao padrão; acima de 100 são limitados a 100.
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Candidato'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /candidatos/{id}:
+    get:
+      summary: Detalhes da candidatura
+      description: Retorna uma candidatura do TSE pelo ID interno.
+      tags:
+        - Candidatos
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID interno da candidatura (`idCandidaturaTse`)
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Candidato'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          description: Candidatura não encontrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+              example:
+                message: Candidato não encontrado.
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
 components:
   responses:
     ParametroInvalido:
@@ -3267,3 +3369,70 @@ components:
           $ref: '#/components/schemas/DespesasPerfil'
         emendas:
           $ref: '#/components/schemas/EmendaResumo'
+
+    Candidato:
+      type: object
+      properties:
+        idCandidaturaTse:
+          type: integer
+          example: 1
+        sqCandidato:
+          type: string
+          description: Sequencial do candidato no TSE (único por ano de eleição).
+          example: '250001600000'
+        anoEleicao:
+          type: integer
+          example: 2022
+        descricaoEleicao:
+          type: string
+          nullable: true
+          example: Eleições Gerais Estaduais 2022
+        uf:
+          type: string
+          nullable: true
+          example: SP
+        cargo:
+          type: string
+          nullable: true
+          example: DEPUTADO FEDERAL
+        numeroCandidato:
+          type: string
+          nullable: true
+          example: '2222'
+        nomeUrna:
+          type: string
+          nullable: true
+          example: FULANO
+        nomeCivil:
+          type: string
+          nullable: true
+          example: FULANO DA SILVA
+        siglaPartido:
+          type: string
+          nullable: true
+          example: ABC
+        situacaoCandidatura:
+          type: string
+          nullable: true
+          example: APTO
+        resultadoEleicao:
+          type: string
+          nullable: true
+          example: ELEITO POR QP
+        idParlamentar:
+          type: integer
+          nullable: true
+          description: Parlamentar vinculado à candidatura, se houver.
+          example: 1
+        nomeParlamentar:
+          type: string
+          nullable: true
+          example: Fulano da Silva
+        fotoUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: >
+            Foto da candidatura no DivulgaCandContas (TSE). Se ausente, usa a
+            foto do parlamentar vinculado; `null` quando nenhuma existe.
+          example: https://divulgacandcontas.tse.jus.br/divulga/rest/arquivo/img/2040602022/250001600000/SP

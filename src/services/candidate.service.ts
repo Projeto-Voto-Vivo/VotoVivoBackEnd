@@ -96,6 +96,7 @@ export class CandidateService {
           siglaPartido: true,
           situacaoCandidatura: true,
           resultadoEleicao: true,
+          fotoUrl: true,
 
           parliamentarian: {
             select: {
@@ -130,7 +131,8 @@ export class CandidateService {
         idParlamentar: candidatura.parliamentarian?.id ?? null,
         nomeParlamentar:
           candidatura.parliamentarian?.ballotName ?? null,
-        fotoUrl: candidatura.parliamentarian?.photoUrl ?? null,
+        fotoUrl:
+          candidatura.fotoUrl ?? candidatura.parliamentarian?.photoUrl ?? null,
       })),
 
       meta: buildMeta(total, page, limit),
@@ -157,6 +159,7 @@ export class CandidateService {
           siglaPartido: true,
           situacaoCandidatura: true,
           resultadoEleicao: true,
+          fotoUrl: true,
 
           parliamentarian: {
             select: {
@@ -189,7 +192,8 @@ export class CandidateService {
       idParlamentar: candidatura.parliamentarian?.id ?? null,
       nomeParlamentar:
         candidatura.parliamentarian?.ballotName ?? null,
-      fotoUrl: candidatura.parliamentarian?.photoUrl ?? null,
+      fotoUrl:
+          candidatura.fotoUrl ?? candidatura.parliamentarian?.photoUrl ?? null,
     };
   }
 }
