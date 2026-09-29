@@ -336,10 +336,22 @@ describe('ParliamentarianService', () => {
       prismaMock.expense.findFirst.mockResolvedValue({
         expenseDate: new Date('2024-03-20T00:00:00Z'),
       });
-      prismaMock.expense.groupBy.mockResolvedValue([
-        { category: 'Hospedagem', _sum: { amount: 850 } },
-        { category: null, _sum: { amount: 150 } },
-      ]);
+      // Um groupBy por categoria e outro por fornecedor.
+      prismaMock.expense.groupBy.mockImplementation(({ by }: { by: string[] }) =>
+        Promise.resolve(
+          by.includes('category')
+            ? [
+                { category: 'Hospedagem', _sum: { amount: 850 } },
+                { category: null, _sum: { amount: 150 } },
+              ]
+            : [
+                { supplierDocument: '111', supplierName: 'HOTEL X LTDA', _sum: { amount: 500 }, _count: { _all: 2 } },
+                { supplierDocument: '111', supplierName: 'Hotel X', _sum: { amount: 100 }, _count: { _all: 1 } },
+                { supplierDocument: null, supplierName: 'Taxi Y', _sum: { amount: 300 }, _count: { _all: 3 } },
+                { supplierDocument: null, supplierName: null, _sum: { amount: 0 }, _count: { _all: 1 } },
+              ],
+        ),
+      );
       prismaMock.expense.aggregate.mockResolvedValue({
         _sum: { amount: 3000 },
         _max: { amount: 1200 },
@@ -377,6 +389,17 @@ describe('ParliamentarianService', () => {
       expect(result.categorias).toEqual([
         { tipoDespesa: 'Hospedagem', total: 850 },
         { tipoDespesa: 'Não informado', total: 150 },
+      ]);
+    });
+
+    it('should rank suppliers merging name variants of the same document', async () => {
+      prismaMock.$queryRaw.mockResolvedValue([{ meses: BigInt(1) }]);
+
+      const result = await service.getExpenseSummaryByParliamentarianId(1, {});
+
+      expect(result.fornecedores).toEqual([
+        { nome: 'HOTEL X LTDA', documento: '111', total: 600, quantidade: 3 },
+        { nome: 'Taxi Y', documento: null, total: 300, quantidade: 3 },
       ]);
     });
 

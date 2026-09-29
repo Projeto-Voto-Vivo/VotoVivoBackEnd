@@ -86,6 +86,9 @@ export type ListVotingsFilters = PaginatedFilters & {
   apenasMerito?: boolean;
 };
 
+
+/** Quantos fornecedores o resumo de despesas devolve, do maior para o menor. */
+const TOP_FORNECEDORES = 10;
 export class ParliamentarianService {
   private readonly alignmentService: AlignmentService;
   private readonly themeProfileService: ThemeProfileService;
@@ -389,12 +392,18 @@ export class ParliamentarianService {
       where.expenseDate = janela;
     }
 
-    const [groupedExpenses, totals, mesesComDados] = await Promise.all([
+    const [groupedExpenses, groupedSuppliers, totals, mesesComDados] = await Promise.all([
       this.prisma.expense.groupBy({
         by: ['category'],
         where,
         _sum: { amount: true },
         orderBy: { category: 'asc' },
+      }),
+      this.prisma.expense.groupBy({
+        by: ['supplierDocument', 'supplierName'],
+        where,
+        _sum: { amount: true },
+        _count: { _all: true },
       }),
       this.prisma.expense.aggregate({
         where,
@@ -418,7 +427,53 @@ export class ParliamentarianService {
         tipoDespesa: group.category ?? 'Não informado',
         total: Number(group._sum.amount ?? 0),
       })),
+      fornecedores: this.rankSuppliers(groupedSuppliers),
     };
+  }
+
+  /**
+   * Para onde o dinheiro vai: soma por fornecedor. O mesmo CNPJ/CPF aparece
+   * com o nome escrito de jeitos diferentes na fonte, então o documento é a
+   * chave; o nome exibido é o da grafia com maior valor.
+   */
+  private rankSuppliers(
+    groups: {
+      supplierDocument: string | null;
+      supplierName: string | null;
+      _sum: { amount: Prisma.Decimal | null };
+      _count: { _all: number };
+    }[],
+  ) {
+    const porFornecedor = new Map<
+      string,
+      { nome: string; documento: string | null; total: number; quantidade: number; maiorGrafia: number }
+    >();
+
+    for (const group of groups) {
+      const documento = group.supplierDocument?.trim() || null;
+      const nome = group.supplierName?.trim() || 'Fornecedor não informado';
+      const chave = documento ?? `nome:${nome.toUpperCase()}`;
+      const total = Number(group._sum.amount ?? 0);
+      const atual = porFornecedor.get(chave);
+
+      if (!atual) {
+        porFornecedor.set(chave, { nome, documento, total, quantidade: group._count._all, maiorGrafia: total });
+        continue;
+      }
+
+      atual.total += total;
+      atual.quantidade += group._count._all;
+      if (total > atual.maiorGrafia) {
+        atual.nome = nome;
+        atual.maiorGrafia = total;
+      }
+    }
+
+    return [...porFornecedor.values()]
+      .filter((fornecedor) => fornecedor.total > 0)
+      .sort((a, b) => b.total - a.total)
+      .slice(0, TOP_FORNECEDORES)
+      .map(({ nome, documento, total, quantidade }) => ({ nome, documento, total, quantidade }));
   }
 
   async listAmendmentsByParliamentarianId(
