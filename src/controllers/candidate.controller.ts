@@ -20,6 +20,8 @@ export class CandidateController {
         partido: getOptionalString(req.query.partido),
         uf: getOptionalString(req.query.uf),
         cargo: getOptionalString(req.query.cargo),
+        situacao: getOptionalString(req.query.situacao),
+        parlamentar: getOptionalNumber(req.query.parlamentar),
         ano: getOptionalNumber(req.query.ano),
         pagina: getOptionalNumber(req.query.pagina),
         limite: getOptionalNumber(req.query.limite),

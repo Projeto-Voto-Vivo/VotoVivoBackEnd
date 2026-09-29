@@ -11,6 +11,8 @@ type ListCandidatesFilters = {
   partido?: string;
   uf?: string;
   cargo?: string;
+  situacao?: string;
+  parlamentar?: number;
   ano?: number;
   pagina?: number;
   limite?: number;
@@ -47,6 +49,14 @@ export class CandidateService {
 
     if (filters.cargo) {
       where.cargo = filters.cargo;
+    }
+
+    if (filters.situacao) {
+      where.situacaoCandidatura = filters.situacao.toUpperCase();
+    }
+
+    if (filters.parlamentar) {
+      where.parliamentarianId = filters.parlamentar;
     }
 
     if (filters.ano) {
