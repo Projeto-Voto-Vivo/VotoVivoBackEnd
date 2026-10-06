@@ -8,6 +8,7 @@ import { dashboardRouter } from './dashboard.routes';
 import { rankingRouter } from './ranking.routes';
 import { statsRouter } from './stats.routes';
 import { candidateRouter } from './candidate.routes';
+import { electionRouter } from './election.routes';
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use(propositionRouter);
 router.use(amendmentRouter);
 router.use(dashboardRouter);
 router.use(candidateRouter);
+router.use(electionRouter);
 
 export { router };

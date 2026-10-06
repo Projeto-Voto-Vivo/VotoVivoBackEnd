@@ -178,6 +178,26 @@ export class CandidateService {
               photoUrl: true,
             },
           },
+
+          // Presidente tem uma linha por UF além da nacional; aqui só a nacional.
+          resultados: {
+            where: {
+              resultado: {
+                OR: [{ cargo: { not: 'PRESIDENTE' } }, { uf: 'BR' }],
+              },
+            },
+            orderBy: { resultado: { turno: 'asc' } },
+            select: {
+              resultadoId: true,
+              posicao: true,
+              votos: true,
+              percentualVotos: true,
+              situacao: true,
+              eleito: true,
+              segundoTurno: true,
+              resultado: { select: { turno: true, uf: true } },
+            },
+          },
         },
       });
 
@@ -204,6 +224,21 @@ export class CandidateService {
         candidatura.parliamentarian?.ballotName ?? null,
       fotoUrl:
           candidatura.fotoUrl ?? candidatura.parliamentarian?.photoUrl ?? null,
+
+      resultados: candidatura.resultados.map((resultado) => ({
+        idEleicaoResultado: resultado.resultadoId,
+        turno: resultado.resultado.turno,
+        uf: resultado.resultado.uf,
+        posicao: resultado.posicao,
+        votos: resultado.votos,
+        percentualVotos:
+          resultado.percentualVotos === null
+            ? null
+            : Number(resultado.percentualVotos),
+        situacao: resultado.situacao,
+        eleito: resultado.eleito,
+        segundoTurno: resultado.segundoTurno,
+      })),
     };
   }
 }

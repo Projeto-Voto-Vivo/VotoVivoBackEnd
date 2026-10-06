@@ -61,12 +61,109 @@ model CandidaturaTse {
   resultadoEleicao    String?          @map("resultadoEleicao") @db.VarChar(100)
   fotoUrl             String?          @map("fotoUrl") @db.VarChar(500)
 
-  parliamentarian Parliamentarian? @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "candidaturaTse_ibfk_1")
+  parliamentarian Parliamentarian?           @relation(fields: [parliamentarianId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "candidaturaTse_ibfk_1")
+  resultados      EleicaoResultadoCandidato[]
 
   @@unique([anoEleicao, sqCandidato], map: "unique_candidatura_ano_sq")
   @@index([parliamentarianId], map: "idx_candidatura_parlamentar")
   @@index([anoEleicao], map: "idx_candidatura_ano")
   @@map("candidaturaTse")
+}
+
+// Totalizacao do TSE por turno/cargo/abrangencia (popular/resultadoEleicao.py).
+// uf = 'BR' e o total nacional e 'ZZ' o exterior, ambos so para PRESIDENTE - que
+// tambem tem uma linha por UF. Somar presidente por 'BR' OU pelas UFs, nunca os dois.
+model EleicaoResultado {
+  id                          Int       @id @default(autoincrement()) @map("idEleicaoResultado")
+  anoEleicao                  Int
+  turno                       Int       @db.TinyInt
+  cargo                       String    @db.VarChar(100)
+  uf                          String    @db.Char(2)
+  vagas                       Int?
+  quocienteEleitoral          Int?
+  eleitorado                  Int?
+  comparecimento              Int?
+  abstencoes                  Int?
+  percentualComparecimento    Decimal?  @db.Decimal(7, 4)
+  percentualAbstencao         Decimal?  @db.Decimal(7, 4)
+  // Senador com duas vagas: cada eleitor da dois votos, logo votosTotais = 2x comparecimento.
+  votosTotais                 Int?
+  votosValidos                Int?
+  votosNominais               Int?
+  votosLegenda                Int?
+  votosBrancos                Int?
+  votosNulos                  Int?
+  votosAnuladosSubJudice      Int?
+  percentualValidos           Decimal?  @db.Decimal(7, 4)
+  percentualBrancos           Decimal?  @db.Decimal(7, 4)
+  percentualNulos             Decimal?  @db.Decimal(7, 4)
+  secoes                      Int?
+  secoesTotalizadas           Int?
+  percentualSecoesTotalizadas Decimal?  @db.Decimal(7, 4)
+  totalizacaoFinal            Boolean   @default(false)
+  haSegundoTurno              Boolean   @default(false)
+  dataTotalizacao             DateTime? @db.DateTime(0)
+  dataGeracao                 DateTime? @db.DateTime(0)
+
+  candidatos EleicaoResultadoCandidato[]
+  partidos   EleicaoResultadoPartido[]
+
+  @@unique([anoEleicao, turno, cargo, uf], map: "unique_eleicao_resultado")
+  @@map("eleicaoResultado")
+}
+
+// percentualVotos e sobre os votos validos. eleito = conquistou a vaga; quem so
+// passou ao 2o turno fica com segundoTurno = true e eleito = false.
+model EleicaoResultadoCandidato {
+  id              Int      @id @default(autoincrement()) @map("idEleicaoResultadoCandidato")
+  resultadoId     Int      @map("idEleicaoResultado")
+  candidaturaId   Int?     @map("idCandidaturaTse")
+  sqCandidato     String   @db.VarChar(50)
+  numeroCandidato String?  @db.VarChar(20)
+  nomeUrna        String?  @db.VarChar(255)
+  nomeCivil       String?  @db.VarChar(255)
+  siglaPartido    String?  @db.VarChar(50)
+  coligacao       String?  @db.VarChar(500)
+  nomeVice        String?  @db.VarChar(255)
+  posicao         Int?
+  votos           Int?
+  percentualVotos Decimal? @db.Decimal(7, 4)
+  situacao        String?  @db.VarChar(100)
+  eleito          Boolean  @default(false)
+  segundoTurno    Boolean  @default(false)
+  situacaoVotos   String?  @db.VarChar(100)
+
+  resultado   EleicaoResultado @relation(fields: [resultadoId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "eleicaoResultadoCandidato_ibfk_1")
+  candidatura CandidaturaTse?  @relation(fields: [candidaturaId], references: [id], onUpdate: NoAction, map: "eleicaoResultadoCandidato_ibfk_2")
+
+  @@unique([resultadoId, sqCandidato], map: "unique_resultado_candidato")
+  @@index([resultadoId, posicao], map: "idx_resultado_candidato_posicao")
+  @@index([sqCandidato], map: "idx_resultado_candidato_sq")
+  @@index([candidaturaId], map: "idCandidaturaTse")
+  @@map("eleicaoResultadoCandidato")
+}
+
+// Cadeiras e votos de cada partido na disputa. A bancada nacional (Camara,
+// Senado) e SUM(cadeiras) das linhas do cargo agrupadas por siglaPartido.
+model EleicaoResultadoPartido {
+  id              Int      @id @default(autoincrement()) @map("idEleicaoResultadoPartido")
+  resultadoId     Int      @map("idEleicaoResultado")
+  siglaPartido    String   @db.VarChar(50)
+  numeroPartido   String?  @db.VarChar(10)
+  nomePartido     String?  @db.VarChar(255)
+  federacao       String?  @db.VarChar(100)
+  coligacao       String?  @db.VarChar(500)
+  cadeiras        Int      @default(0)
+  votosNominais   Int?
+  votosLegenda    Int?
+  votos           Int?
+  percentualVotos Decimal? @db.Decimal(7, 4)
+
+  resultado EleicaoResultado @relation(fields: [resultadoId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "eleicaoResultadoPartido_ibfk_1")
+
+  @@unique([resultadoId, siglaPartido], map: "unique_resultado_partido")
+  @@index([siglaPartido], map: "idx_resultado_partido_sigla")
+  @@map("eleicaoResultadoPartido")
 }
 
 model Party {

@@ -1838,7 +1838,45 @@ paths:
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Candidato'
+                allOf:
+                  - $ref: '#/components/schemas/Candidato'
+                  - type: object
+                    properties:
+                      resultados:
+                        type: array
+                        description: >
+                          Votação do candidato em cada turno. Vazio enquanto a
+                          totalização não foi carregada. Para presidente traz só
+                          o total nacional.
+                        items:
+                          type: object
+                          properties:
+                            idEleicaoResultado:
+                              type: integer
+                            turno:
+                              type: integer
+                              example: 1
+                            uf:
+                              type: string
+                              example: SP
+                            posicao:
+                              type: integer
+                              nullable: true
+                            votos:
+                              type: integer
+                              nullable: true
+                            percentualVotos:
+                              type: number
+                              nullable: true
+                              description: Sobre os votos válidos.
+                            situacao:
+                              type: string
+                              nullable: true
+                              example: Eleito por QP
+                            eleito:
+                              type: boolean
+                            segundoTurno:
+                              type: boolean
         '400':
           $ref: '#/components/responses/ParametroInvalido'
         '404':
@@ -1849,6 +1887,265 @@ paths:
                 $ref: '#/components/schemas/ErroResponse'
               example:
                 message: Candidato não encontrado.
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /eleicoes/resultados:
+    get:
+      summary: Lista resultados de eleição
+      description: >
+        Totalização oficial do TSE, uma linha por disputa (ano, turno, cargo e
+        abrangência): comparecimento, abstenção, votos válidos/brancos/nulos e
+        seções totalizadas. `uf=BR` é o total nacional e `uf=ZZ` o exterior,
+        ambos só para PRESIDENTE — que também tem uma linha por UF; os demais
+        cargos existem só por UF.
+      tags:
+        - Eleições
+      parameters:
+        - in: query
+          name: ano
+          schema:
+            type: integer
+          description: Ano da eleição (ex. 2026)
+        - in: query
+          name: turno
+          schema:
+            type: integer
+            enum: [1, 2]
+        - in: query
+          name: cargo
+          schema:
+            type: string
+          description: Cargo exato (ex. PRESIDENTE, GOVERNADOR, SENADOR, DEPUTADO FEDERAL)
+        - in: query
+          name: uf
+          schema:
+            type: string
+          description: Sigla do estado; BR para o total nacional de presidente, ZZ para o exterior
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ResultadoEleicao'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /eleicoes/resultados/{id}:
+    get:
+      summary: Detalhes de um resultado de eleição
+      description: Totais da disputa e o desempenho de cada partido nela.
+      tags:
+        - Eleições
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID interno do resultado (`idEleicaoResultado`)
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ResultadoEleicao'
+                  - type: object
+                    properties:
+                      partidos:
+                        type: array
+                        description: Ordenado por cadeiras e, depois, por votos.
+                        items:
+                          $ref: '#/components/schemas/ResultadoEleicaoPartido'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          description: Resultado não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+              example:
+                message: Resultado de eleição não encontrado.
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /eleicoes/resultados/{id}/candidatos:
+    get:
+      summary: Candidatos de um resultado de eleição
+      description: >
+        Votação de cada candidato na disputa, paginada e ordenada pela
+        colocação. `percentualVotos` é sobre os votos válidos.
+      tags:
+        - Eleições
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: ID interno do resultado (`idEleicaoResultado`)
+        - in: query
+          name: nome
+          schema:
+            type: string
+          description: Filtrar por parte do nome de urna ou do nome civil
+        - in: query
+          name: partido
+          schema:
+            type: string
+          description: Sigla do partido
+        - in: query
+          name: eleito
+          schema:
+            type: boolean
+          description: '`true` só quem conquistou a vaga; `false` os demais.'
+        - in: query
+          name: pagina
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limite
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ResultadoEleicaoCandidato'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
+        '404':
+          description: Resultado não encontrado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErroResponse'
+              example:
+                message: Resultado de eleição não encontrado.
+        '429':
+          $ref: '#/components/responses/LimiteExcedido'
+        '500':
+          $ref: '#/components/responses/ErroInterno'
+
+  /eleicoes/bancadas:
+    get:
+      summary: Bancada eleita por partido
+      description: >
+        Cadeiras e votos de cada partido para um cargo, somados entre as
+        disputas — as 27 UFs para Câmara e Senado. As cadeiras somam todos os
+        turnos; os votos são só os do 1º turno. Para PRESIDENTE usa apenas a
+        linha nacional (`uf=BR`), salvo se `uf` for informado.
+      tags:
+        - Eleições
+      parameters:
+        - in: query
+          name: cargo
+          required: true
+          schema:
+            type: string
+          description: Cargo exato (ex. DEPUTADO FEDERAL, SENADOR)
+        - in: query
+          name: ano
+          schema:
+            type: integer
+          description: Ano da eleição. Padrão é a eleição mais recente carregada.
+        - in: query
+          name: uf
+          schema:
+            type: string
+          description: Restringe a uma UF.
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  anoEleicao:
+                    type: integer
+                    nullable: true
+                    description: '`null` quando nenhum resultado foi carregado ainda.'
+                    example: 2026
+                  cargo:
+                    type: string
+                    example: DEPUTADO FEDERAL
+                  uf:
+                    type: string
+                    nullable: true
+                    description: UF aplicada; `null` quando soma todas.
+                  totalCadeiras:
+                    type: integer
+                    example: 513
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        siglaPartido:
+                          type: string
+                          example: ABC
+                        numeroPartido:
+                          type: string
+                          nullable: true
+                          example: '99'
+                        nomePartido:
+                          type: string
+                          nullable: true
+                        federacao:
+                          type: string
+                          nullable: true
+                        cadeiras:
+                          type: integer
+                          example: 42
+                        votos:
+                          type: integer
+                          description: Votos nominais + de legenda no 1º turno.
+                          example: 1234567
+        '400':
+          $ref: '#/components/responses/ParametroInvalido'
         '429':
           $ref: '#/components/responses/LimiteExcedido'
         '500':
@@ -3369,6 +3666,206 @@ components:
           $ref: '#/components/schemas/DespesasPerfil'
         emendas:
           $ref: '#/components/schemas/EmendaResumo'
+
+    ResultadoEleicao:
+      type: object
+      properties:
+        idEleicaoResultado:
+          type: integer
+          example: 1
+        anoEleicao:
+          type: integer
+          example: 2026
+        turno:
+          type: integer
+          example: 1
+        cargo:
+          type: string
+          example: GOVERNADOR
+        uf:
+          type: string
+          description: Sigla do estado; BR (nacional) e ZZ (exterior) só para presidente.
+          example: SP
+        vagas:
+          type: integer
+          nullable: true
+        quocienteEleitoral:
+          type: integer
+          nullable: true
+          description: Só para cargos proporcionais.
+        eleitorado:
+          type: integer
+          nullable: true
+        comparecimento:
+          type: integer
+          nullable: true
+        abstencoes:
+          type: integer
+          nullable: true
+        percentualComparecimento:
+          type: number
+          nullable: true
+        percentualAbstencao:
+          type: number
+          nullable: true
+        votosTotais:
+          type: integer
+          nullable: true
+          description: Senador com duas vagas — cada eleitor dá dois votos, então é o dobro do comparecimento.
+        votosValidos:
+          type: integer
+          nullable: true
+        votosNominais:
+          type: integer
+          nullable: true
+        votosLegenda:
+          type: integer
+          nullable: true
+        votosBrancos:
+          type: integer
+          nullable: true
+        votosNulos:
+          type: integer
+          nullable: true
+        votosAnuladosSubJudice:
+          type: integer
+          nullable: true
+        percentualValidos:
+          type: number
+          nullable: true
+        percentualBrancos:
+          type: number
+          nullable: true
+        percentualNulos:
+          type: number
+          nullable: true
+        secoes:
+          type: integer
+          nullable: true
+        secoesTotalizadas:
+          type: integer
+          nullable: true
+        percentualSecoesTotalizadas:
+          type: number
+          nullable: true
+        totalizacaoFinal:
+          type: boolean
+          description: '`false` enquanto a apuração está em andamento.'
+        haSegundoTurno:
+          type: boolean
+          description: A disputa foi (ou vai) a 2º turno.
+        dataTotalizacao:
+          type: string
+          format: date-time
+          nullable: true
+        dataGeracao:
+          type: string
+          format: date-time
+          nullable: true
+
+    ResultadoEleicaoPartido:
+      type: object
+      properties:
+        siglaPartido:
+          type: string
+          example: ABC
+        numeroPartido:
+          type: string
+          nullable: true
+          example: '99'
+        nomePartido:
+          type: string
+          nullable: true
+        federacao:
+          type: string
+          nullable: true
+        coligacao:
+          type: string
+          nullable: true
+        cadeiras:
+          type: integer
+          example: 3
+        votosNominais:
+          type: integer
+          nullable: true
+        votosLegenda:
+          type: integer
+          nullable: true
+        votos:
+          type: integer
+          nullable: true
+          description: Nominais + legenda.
+        percentualVotos:
+          type: number
+          nullable: true
+          description: Sobre os votos válidos.
+
+    ResultadoEleicaoCandidato:
+      type: object
+      properties:
+        idCandidaturaTse:
+          type: integer
+          nullable: true
+          description: Candidatura correspondente em `/candidatos/{id}`, se vinculada.
+        sqCandidato:
+          type: string
+          example: '250001600000'
+        numeroCandidato:
+          type: string
+          nullable: true
+          example: '99'
+        nomeUrna:
+          type: string
+          nullable: true
+          example: FULANO
+        nomeCivil:
+          type: string
+          nullable: true
+          example: FULANO DA SILVA
+        siglaPartido:
+          type: string
+          nullable: true
+          example: ABC
+        coligacao:
+          type: string
+          nullable: true
+        nomeVice:
+          type: string
+          nullable: true
+          description: Só para cargos com vice (presidente, governador).
+        posicao:
+          type: integer
+          nullable: true
+          description: Colocação na disputa.
+        votos:
+          type: integer
+          nullable: true
+        percentualVotos:
+          type: number
+          nullable: true
+          description: Sobre os votos válidos.
+        situacao:
+          type: string
+          nullable: true
+          example: Eleito por QP
+        eleito:
+          type: boolean
+          description: Conquistou a vaga. Quem só passou ao 2º turno fica `false`.
+        segundoTurno:
+          type: boolean
+          description: Passou ao 2º turno.
+        situacaoVotos:
+          type: string
+          nullable: true
+          description: Situação dos votos na totalização (ex. sub judice).
+        idParlamentar:
+          type: integer
+          nullable: true
+          description: Parlamentar vinculado à candidatura, se houver.
+        fotoUrl:
+          type: string
+          format: uri
+          nullable: true
 
     Candidato:
       type: object

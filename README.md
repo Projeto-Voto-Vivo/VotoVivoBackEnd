@@ -14,6 +14,7 @@ A API fornece dados processados a partir de fontes oficiais (Câmara dos Deputad
 - **Proposições:** Proposições das quais o parlamentar é autor, com paginação.
 - **Presença:** Métricas de assiduidade calculadas a partir dos votos registrados.
 - **Emendas Parlamentares:** Lista de emendas vinculadas ao parlamentar com valores empenhados, liquidados e pagos; resumo agregado de totais; documentos de execução por emenda.
+- **Resultados Eleitorais:** Totalização oficial do TSE por turno, cargo e UF (comparecimento, abstenção, válidos/brancos/nulos); votação e situação de cada candidato; cadeiras e votos por partido e a bancada eleita por cargo.
 - **Perfil Agregado:** Endpoint único que consolida visão geral, votações recentes, proposições, despesas e emendas para alimentar painéis do frontend.
 
 ## Tecnologias
